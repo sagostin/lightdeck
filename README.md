@@ -1,9 +1,9 @@
 # LightDeck
 
-<!-- Replace OWNER with your GitHub user or organisation once the repository is on GitHub. -->
-[![CI](https://github.com/OWNER/lightdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/lightdeck/actions/workflows/ci.yml)
-[![Release](https://github.com/OWNER/lightdeck/actions/workflows/release.yml/badge.svg)](https://github.com/OWNER/lightdeck/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/OWNER/lightdeck?sort=semver&label=download)](https://github.com/OWNER/lightdeck/releases/latest)
+<!-- Replace sagostin with your GitHub user or organisation once the repository is on GitHub. -->
+[![CI](https://github.com/sagostin/lightdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/sagostin/lightdeck/actions/workflows/ci.yml)
+[![Release](https://github.com/sagostin/lightdeck/actions/workflows/release.yml/badge.svg)](https://github.com/sagostin/lightdeck/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/sagostin/lightdeck?sort=semver&label=download)](https://github.com/sagostin/lightdeck/releases/latest)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-555)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
 ![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)
@@ -42,7 +42,7 @@ Screenshots use the built-in demo show (see [Development](#development)).
 
 ## Download
 
-Installers for macOS (Apple Silicon and Intel), Windows and Linux are on the [Releases](https://github.com/OWNER/lightdeck/releases) page. Builds are unsigned: on macOS right-click the app and choose **Open** the first time. See [Building and releasing](docs/releasing.md#unsigned-builds).
+Installers for macOS (Apple Silicon and Intel), Windows and Linux are on the [Releases](https://github.com/sagostin/lightdeck/releases) page. Builds are unsigned: on macOS right-click the app and choose **Open** the first time. See [Building and releasing](docs/releasing.md#unsigned-builds).
 
 ## Quick start
 
