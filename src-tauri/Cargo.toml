@@ -1,6 +1,6 @@
 [package]
 name = "lightdeck"
-version = "0.1.0"
+version = "0.1.1"
 description = "Audio-reactive Art-Net lighting controller"
 edition = "2021"
 
