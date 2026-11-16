@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "release:build": "tauri build --config src-tauri/tauri.bundle.json",
-    "version:set": "node scripts/version.mjs"
+    "version:set": "node scripts/version.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"

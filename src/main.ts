@@ -9,9 +9,12 @@ async function start() {
   // Outside Tauri (a plain browser during development), run against mock data.
   if (import.meta.env.DEV && !inTauri) {
     const { installMocks } = await import("./dev/mock");
-    installMocks();
-    const view = new URLSearchParams(location.search).get("view");
+    const params = new URLSearchParams(location.search);
+    const demo = params.has("demo");
+    installMocks(demo);
+    const view = params.get("view");
     if (view) app.view = view;
+    if (demo) (await import("./dev/demo")).startDemoFeed();
   }
   mount(App, { target: document.getElementById("app")! });
 }

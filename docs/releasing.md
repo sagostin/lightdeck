@@ -7,13 +7,13 @@ LightDeck builds installers for macOS (Apple Silicon and Intel), Windows and Lin
 | Workflow | Runs on | What it does |
 |---|---|---|
 | `.github/workflows/ci.yml` | every push to `main`, every pull request, or by hand | UI type-check and build; `cargo test` on macOS, Windows and Linux |
-| `.github/workflows/release.yml` | pushing a `v*` tag, or by hand | Builds installers on all four targets and attaches them to a **draft** GitHub release |
+| `.github/workflows/release.yml` | pushing a `v*` tag, or by hand | Creates a **draft** GitHub release, builds installers on all four targets, and uploads them to it |
 
 The release workflow outputs:
 
 | Platform | Files |
 |---|---|
-| macOS | `.dmg` and `.app.tar.gz` (`aarch64` = Apple Silicon, `x64` = Intel) |
+| macOS | `.dmg` only (`aarch64` = Apple Silicon, `x64` = Intel). Open it and drag LightDeck to Applications. |
 | Windows | `.msi` and `-setup.exe` (NSIS) |
 | Linux | `.AppImage`, `.deb`, `.rpm` |
 
@@ -32,6 +32,8 @@ git remote add origin https://github.com/<you>/lightdeck.git && git push -u orig
 ```
 
 `.gitignore` already leaves out `node_modules`, build output, and the downloaded Node runtime. Your show and settings live in `~/Library/Application Support/dev.lightdeck.app/`, outside the repository, so API keys and Zigbee network keys are never committed.
+
+Replace `OWNER` in the badge and download links at the top of `README.md` with your GitHub user or organisation name.
 
 In the repository's **Settings → Actions → General**, make sure *Workflow permissions* allows **Read and write** (the release job creates releases with the built-in token).
 
@@ -55,6 +57,8 @@ In the repository's **Settings → Actions → General**, make sure *Workflow pe
 
 3. Watch the **Actions** tab. Each platform takes roughly 10–20 minutes the first time and less after the caches warm up.
 4. Open **Releases**, check the draft and its files, edit the notes, and click **Publish**.
+
+Only these installers are attached to the release, never bare binaries or zipped `.app` bundles. Each build also keeps a copy of its installers as a workflow artifact for 14 days (on the run's summary page), which is handy for testing a build before publishing.
 
 The workflow stops early if the tag doesn't match the app version (e.g. tagging `v0.2.0` while `tauri.conf.json` still says `0.1.0`).
 

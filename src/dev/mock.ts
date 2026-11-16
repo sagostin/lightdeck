@@ -1,12 +1,15 @@
 // Development only: when the UI is opened in a normal browser (not inside Tauri),
 // fake the backend so screens can be viewed and checked. Open http://localhost:1420
-// while `npm run dev` or `npx tauri dev` is running. Add ?view=<screen> to jump to one.
+// while `npm run dev` or `npx tauri dev` is running. Add ?view=<screen> to jump to one,
+// and ?demo for the demo show with a fake audio feed (see demo.ts).
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import sample from "./sample-show.json";
+import { demoShow } from "./demo";
+import type { Show } from "../lib/types";
 
-export function installMocks() {
+export function installMocks(demo = false) {
   mockWindows("main");
-  let show = structuredClone(sample) as Record<string, unknown>;
+  let show = (demo ? demoShow(structuredClone(sample) as unknown as Show) : structuredClone(sample)) as unknown as Record<string, unknown>;
   const manual: Record<string, Record<string, number>> = {};
   mockIPC((cmd, args) => {
     const a = (args ?? {}) as Record<string, unknown>;
@@ -25,7 +28,7 @@ export function installMocks() {
         else for (const k of Object.keys(manual)) delete manual[k];
         return null;
       }
-      case "project_info": return { path: null, name: "Browser preview", recent: [] };
+      case "project_info": return { path: null, name: demo ? "Club night" : "Browser preview", recent: [] };
       case "control_state": return { routes: {}, bands: {}, blackout: false, master: 1, manual, active_presets: [], fired: null };
       case "list_audio_devices": return ["Mock input"];
       case "get_band_presets": return [];

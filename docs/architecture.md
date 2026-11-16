@@ -42,7 +42,7 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src-tauri/src/lib.rs` | App setup, shared state, Tauri commands, the starter show |
 | `zigbee-helper/index.mjs` | Zigbee coordinator helper |
 | `fixtures/` | QLC+ files bundled into the starter show |
-| `scripts/` | `prepare-bundle.mjs` (release bundling) and `version.mjs` (set the version everywhere) |
+| `scripts/` | `prepare-bundle.mjs` (release bundling), `version.mjs` (set the version everywhere), `screenshots.mjs` (README images) |
 | `.github/workflows/` | CI (`ci.yml`) and release builds (`release.yml`) |
 
 ## Data model
@@ -119,7 +119,7 @@ The UI calls these through `invoke` (see `generate_handler!` in `lib.rs`):
 
 ## Previewing the UI in a browser
 
-During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen. Mocks are only loaded in development builds.
+During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen, and `?demo` for the demo show in `src/dev/demo.ts` with a simulated audio feed (`npm run screenshots` captures it for the README). Mocks are only loaded in development builds.
 
 ## Tests
 

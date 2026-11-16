@@ -1,8 +1,19 @@
 # LightDeck
 
+<!-- Replace OWNER with your GitHub user or organisation once the repository is on GitHub. -->
+[![CI](https://github.com/OWNER/lightdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/lightdeck/actions/workflows/ci.yml)
+[![Release](https://github.com/OWNER/lightdeck/actions/workflows/release.yml/badge.svg)](https://github.com/OWNER/lightdeck/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/OWNER/lightdeck?sort=semver&label=download)](https://github.com/OWNER/lightdeck/releases/latest)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-555)
+![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
+![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-stable-000?logo=rust&logoColor=white)
+
 An audio-reactive lighting controller for macOS. LightDeck listens to music, detects kicks, snares, hi-hats, bass and vocals, and drives DMX fixtures over Art-Net and Zigbee lights in time with it. You lay fixtures out in your rooms, connect what it hears to what the lights do with **routes**, and play it live from MIDI controllers or the keyboard.
 
-Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI).
+Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Developed and tested on macOS; Windows and Linux builds are produced too.
+
+![LightDeck's Live screen: a room plan with eight coloured pars, a laser and fog around a dance floor focus point, with band meters and routes](docs/images/live.png)
 
 ## What it does
 
@@ -18,6 +29,20 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI).
 - **Live control:** MIDI and keyboard mappings with Learn, saved presets, a master brightness fader and blackout.
 - **Outputs:** Art-Net to any node (e.g. PKnight). Zigbee lights work either through a USB dongle, with LightDeck as the coordinator (no hub or MQTT needed), or through an existing Zigbee2MQTT setup.
 - **Projects:** `.lightdeck` project files, autosave, and export/import of app settings.
+
+## Screenshots
+
+| | |
+|---|---|
+| [![Routes](docs/images/routes.png)](docs/images/routes.png) **Routes** connect hits and levels to channel actions and effects, grouped and targeted by room, group or device. | [![Audio](docs/images/audio.png)](docs/images/audio.png) **Audio** detection bands drawn on a live spectrum, with an onset trace for tuning hits. |
+| [![Rooms](docs/images/rooms.png)](docs/images/rooms.png) **Rooms** drawn to scale, with fixtures, beam directions and focus points. | [![Pattern browser](docs/images/browser.png)](docs/images/browser.png) **Pattern browser** steps through a laser's values on the real device so you can tag, rate and save looks. |
+| [![Control](docs/images/control.png)](docs/images/control.png) **Control** maps MIDI pads, faders and keys to routes, presets, master and blackout. | |
+
+Screenshots use the built-in demo show (see [Development](#development)).
+
+## Download
+
+Installers for macOS (Apple Silicon and Intel), Windows and Linux are on the [Releases](https://github.com/OWNER/lightdeck/releases) page. Builds are unsigned: on macOS right-click the app and choose **Open** the first time. See [Building and releasing](docs/releasing.md#unsigned-builds).
 
 ## Quick start
 
@@ -83,6 +108,12 @@ Any other key can be mapped to an action on the **Control** screen.
 npm run check                          # type-check the UI
 npm test                               # Rust: engine, importer, Zigbee, MIDI and effect tests
 ```
+
+With the dev server running (`npm run dev` or `npx tauri dev`), open the UI in a normal browser to work on screens without hardware:
+
+- <http://localhost:1420/> uses a copy of a real show with a fake backend.
+- <http://localhost:1420/?demo> loads the demo club show (eight pars, laser, fog, two rooms) with a simulated 124 BPM audio feed. Add `&view=routes` (or `rooms`, `audio`, `control`, `library&tab=browser`…) to open a screen directly.
+- `npm run screenshots` regenerates the images in `docs/images/` from the demo (needs Google Chrome).
 
 See [Architecture](docs/architecture.md) for how the pieces fit together.
 

@@ -10,7 +10,9 @@
   const show = app.show!;
   let selectedId = $state<string | null>(show.profiles[0]?.id ?? null);
   let openChan = $state<string | null>(null);
-  let tab = $state<"channels" | "browser" | "patterns">("channels");
+  // Dev preview only: ?tab=browser|patterns opens that tab (used for README screenshots).
+  const devTab = import.meta.env.DEV ? new URLSearchParams(location.search).get("tab") : null;
+  let tab = $state<"channels" | "browser" | "patterns">(devTab === "browser" || devTab === "patterns" ? devTab : "channels");
   let msg = $state("");
   const sel = $derived(show.profiles.find((p) => p.id === selectedId));
 
