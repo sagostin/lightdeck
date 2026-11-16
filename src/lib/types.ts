@@ -193,3 +193,11 @@ export interface ControlState {
 export interface Palette { id: string; name: string; colors: string[] }
 /** Route actions that drive whole fixtures (brightness + colour) instead of one channel. */
 export const EFFECT_ACTIONS = ["strobe", "palette", "twinkle", "wave"];
+
+export interface ControllerInput { kind: "note" | "cc"; number: number; label: string }
+/** A MIDI controller layout: pads/buttons and faders/knobs in the order auto-mapping assigns them. */
+export interface ControllerProfile {
+  id: string; name: string; channel: number; pads: ControllerInput[]; faders: ControllerInput[]; notes: string;
+  /** Built into LightDeck (not saved; copy it to change it). */
+  builtin?: boolean;
+}

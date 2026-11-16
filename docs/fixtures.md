@@ -53,7 +53,39 @@ Select a type to edit its manufacturer, model and **kind** (laser, par, fog, mov
 
 The **group** of each channel matters too: *intensity* channels follow the master fader and blackout; *intensity* and *colour* channels are what effects drive.
 
-**Copy JSON** puts the fixture type on the clipboard as LightDeck JSON; **Import LightDeck .json** brings one back.
+**Export…** saves the fixture type, with its looks, as a `.lightdeck-fixture` file. **Import LightDeck fixture** brings types in from any of these:
+
+- a `.lightdeck-fixture` file;
+- a library export;
+- a `.lightdeck` project (takes all of its types);
+- a settings export (takes its library);
+- JSON from older versions' **Copy JSON**.
+
+If a type with the same id is already in the project, you choose: **Merge** it in (see below), **Add as copy**, or **Skip**.
+
+## Fixture library
+
+The library keeps fixture types and their looks for every project on this Mac. It's how you set up a laser's looks once and reuse them in every show.
+
+Each project keeps **its own copy** of every type it uses. So a project file always works on its own (at a gig, offline, or sent to someone else), and changing the library never changes an existing show.
+
+Switch the list at the top of **Fixture types** between **This project** and **Library**.
+
+- **Save to library** (on a project's fixture type) adds it to the library, or updates the library's copy.
+- **Add to this project** (on a library type) copies it into the current project.
+- Each project type shows how it compares with the library, and a dot in the list means it's in the library (amber if they differ). For example: "2 looks only in the library · 1 only here · channels, tags or details differ". **Update from library** brings the library's version in.
+- **Export whole library…** saves every type to one file. **Import into library** reads one back (or any of the files above).
+- **New project** uses your library's version of the bundled starter types, so their looks come with them.
+
+Copying in either direction **merges**:
+
+- The fixture type itself (channels, ranges, tags, blocked values, modes, names) becomes the source's.
+- New looks and look sets are added, and ones that exist on both sides take the source's version.
+- Looks that only exist on the receiving side are **kept**. A venue's own looks survive an update from the library, and saving to the library never deletes looks other projects added there.
+
+Per-venue calibration is not part of the fixture type, so it never goes to the library: limits (lock, range, hold, required tags), addresses and positions live on each patched fixture in the project.
+
+Library types are edited in a project: add or open the type there, change it, then **Save to library**. The library is included in [settings export](projects-and-settings.md#app-settings).
 
 ## The pattern browser
 

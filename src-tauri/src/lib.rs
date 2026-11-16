@@ -192,8 +192,11 @@ async fn settings_export(app: AppHandle, state: State<'_, AppState>, include_key
     };
     let path = project::with_ext(fp.into_path().map_err(|e| e.to_string())?, project::SETTINGS_EXT);
     let ai = state.ai.lock().unwrap().clone();
-    let presets = state.prefs.lock().unwrap().band_presets.clone();
-    project::write_settings(&path, &ai, include_key, &presets)?;
+    let (presets, controllers, library) = {
+        let p = state.prefs.lock().unwrap();
+        (p.band_presets.clone(), p.controller_profiles.clone(), p.fixture_library.clone())
+    };
+    project::write_settings(&path, &ai, include_key, &presets, &controllers, &library)?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
@@ -228,6 +231,22 @@ async fn settings_import(app: AppHandle, state: State<'_, AppState>) -> Result<O
             p.band_presets.push(b.clone());
         }
         summary.push(format!("{} band preset(s)", f.band_presets.len()));
+    }
+    if !f.controller_profiles.is_empty() {
+        let mut p = state.prefs.lock().unwrap();
+        for c in &f.controller_profiles {
+            p.controller_profiles.retain(|x| x.id != c.id);
+            p.controller_profiles.push(c.clone());
+        }
+        summary.push(format!("{} controller profile(s)", f.controller_profiles.len()));
+    }
+    if !f.fixture_library.is_empty() {
+        let mut p = state.prefs.lock().unwrap();
+        for x in &f.fixture_library {
+            p.fixture_library.retain(|y| y.id != x.id);
+            p.fixture_library.push(x.clone());
+        }
+        summary.push(format!("{} library fixture type(s)", f.fixture_library.len()));
     }
     save_prefs(&state)?;
     Ok(Some(if summary.is_empty() { "Nothing to import".into() } else { format!("Imported {}", summary.join(" and ")) }))
@@ -323,6 +342,63 @@ fn get_band_presets(state: State<AppState>) -> Vec<BandDef> {
 fn save_band_presets(state: State<AppState>, presets: Vec<BandDef>) -> Result<(), String> {
     state.prefs.lock().unwrap().band_presets = presets;
     save_prefs(&state)
+}
+
+#[tauri::command]
+fn get_controller_profiles(state: State<AppState>) -> Vec<ControllerProfile> {
+    state.prefs.lock().unwrap().controller_profiles.clone()
+}
+
+#[tauri::command]
+fn save_controller_profiles(state: State<AppState>, profiles: Vec<ControllerProfile>) -> Result<(), String> {
+    state.prefs.lock().unwrap().controller_profiles = profiles;
+    save_prefs(&state)
+}
+
+#[tauri::command]
+fn get_fixture_library(state: State<AppState>) -> Vec<Profile> {
+    state.prefs.lock().unwrap().fixture_library.clone()
+}
+
+#[tauri::command]
+fn save_fixture_library(state: State<AppState>, library: Vec<Profile>) -> Result<(), String> {
+    state.prefs.lock().unwrap().fixture_library = library;
+    save_prefs(&state)
+}
+
+/// Save fixture types to a `.lightdeck-fixture` file. Returns the path, or None if cancelled.
+#[tauri::command]
+async fn fixture_export(app: AppHandle, profiles: Vec<Profile>, name: String) -> Result<Option<String>, String> {
+    if profiles.is_empty() {
+        return Err("Nothing to export".into());
+    }
+    let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect();
+    let Some(fp) = app
+        .dialog()
+        .file()
+        .set_title("Export fixture types")
+        .set_file_name(format!("{}.{}", safe.trim(), project::FIXTURE_EXT))
+        .add_filter("LightDeck fixture", &[project::FIXTURE_EXT])
+        .blocking_save_file()
+    else {
+        return Ok(None);
+    };
+    let path = project::with_ext(fp.into_path().map_err(|e| e.to_string())?, project::FIXTURE_EXT);
+    project::write_atomic(&path, &project::fixture_file_json(&profiles)?)?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Read fixture types from a file's text (fixture file, library export, project, settings, or a bare profile).
+#[tauri::command]
+fn parse_fixture_file(text: String) -> Result<Vec<Profile>, String> {
+    project::parse_fixture_file(&text)
+}
+
+/// Check a plan built without AI (setup templates) the same way AI plans are checked.
+#[tauri::command]
+fn design_check(show: Show, plan: serde_json::Value) -> designer::DesignResult {
+    let (plan, warnings) = designer::sanitize(&show, &plan);
+    designer::DesignResult { plan, warnings }
 }
 
 #[tauri::command]
@@ -654,6 +730,13 @@ pub fn run() {
             settings_import,
             get_band_presets,
             save_band_presets,
+            get_controller_profiles,
+            save_controller_profiles,
+            design_check,
+            get_fixture_library,
+            save_fixture_library,
+            fixture_export,
+            parse_fixture_file,
             zigbee_status,
             zigbee_reconnect,
             zigbee_identify,

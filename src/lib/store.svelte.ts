@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ChannelDef, ControlState, Fixture, Frame, MidiEvent, Profile, ProjectInfo, Show } from "./types";
+import { mergeInto } from "./library";
 
 export const app = $state({
   show: null as Show | null,
@@ -52,8 +53,18 @@ function loaded(show: Show, info: ProjectInfo) {
 
 export async function newProject() {
   const r = await invoke<{ show: Show; info: ProjectInfo }>("project_new");
+  // Starter fixture types you've saved to the library come with your looks.
+  let fromLib = 0;
+  try {
+    const library = await invoke<Profile[]>("get_fixture_library");
+    for (const p of r.show.profiles) {
+      const l = library.find((x) => x.id === p.id);
+      if (l) { mergeInto(p, l); fromLib++; }
+    }
+  } catch { /* library unavailable: keep the starter types */ }
   loaded(r.show, r.info);
-  toast("New project");
+  toast(fromLib ? `New project (${fromLib} fixture type${fromLib === 1 ? "" : "s"} from your library)` : "New project");
+  if (fromLib) await invoke("save_show", { show: $state.snapshot(r.show) });
 }
 
 export async function openProject(path?: string) {

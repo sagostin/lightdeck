@@ -14,6 +14,8 @@ The project name at the top of the sidebar is the **File** menu:
 | Save as… | `⇧⌘S` |
 | Recent | The last 8 projects |
 
+**Save as…** writes a copy to a new file and switches to it, so later changes go to the copy and the original stays as it was. Use it to start a new venue or night from an existing setup.
+
 Projects are saved as `.lightdeck` files (JSON). A dot next to the project name, and in the window title, means there are unsaved changes. If you have unsaved changes, New and Open ask you to click again before discarding them.
 
 ### Autosave
@@ -30,9 +32,11 @@ Some settings belong to LightDeck on this Mac rather than to a project:
 
 - the AI provider (base URL, schema, model, headers, key);
 - your saved band presets;
+- your own MIDI controller profiles;
+- the [fixture library](fixtures.md#fixture-library);
 - the recent-projects list.
 
-**Export settings…** in the File menu writes a `.lightdeck-settings` file with the AI settings and band presets. The API key is left out unless you tick **Include API key in export**. **Import settings…** merges band presets by name and replaces the AI settings, keeping your current key if the file has none.
+**Export settings…** in the File menu writes a `.lightdeck-settings` file with the AI settings, band presets, controller profiles and fixture library. The API key is left out unless you tick **Include API key in export**. **Import settings…** merges band presets by name, and controller profiles and library fixture types by id, and replaces the AI settings, keeping your current key if the file has none.
 
 ## Where data lives
 
@@ -41,7 +45,7 @@ Everything is in `~/Library/Application Support/dev.lightdeck.app/`:
 | Path | Contents |
 |---|---|
 | `show.json` | The autosaved working copy of the current show |
-| `prefs.json` | Current project path, recent projects, band presets |
+| `prefs.json` | Current project path, recent projects, band presets, controller profiles, fixture library |
 | `ai.json` | AI provider settings, **including the API key** in plain text |
 | `zigbee/network.json` | The USB Zigbee network's PAN ID, extended PAN ID, network key and channel |
 | `zigbee/database.db`, `coordinator_backup.json` | Paired Zigbee devices and the coordinator backup |

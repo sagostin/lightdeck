@@ -4,6 +4,9 @@
   import ConfirmButton from "../components/ConfirmButton.svelte";
   import TargetPicker from "../components/TargetPicker.svelte";
   import ChannelSelect from "../components/ChannelSelect.svelte";
+  import SceneEditor from "../components/SceneEditor.svelte";
+  import ControllerSetup from "../components/ControllerSetup.svelte";
+  import { newScene, sceneSummary } from "../lib/scenes";
   import { app, uid, toast, modeChannels } from "../lib/store.svelte";
   import type { ControlAction, ControlMapping, MidiStatus, Preset } from "../lib/types";
 
@@ -119,8 +122,29 @@
   function describePreset(p: Preset) {
     const fx = new Set(p.values.map((v) => v.fixture));
     const names = show.fixtures.filter((f) => fx.has(f.id)).map((f) => f.name);
-    const routes = Object.keys(p.routes).length ? " + route states" : "";
-    return `${p.values.length} value${p.values.length === 1 ? "" : "s"}${names.length ? ` on ${names.join(", ")}` : ""}${routes}`;
+    const { on, off } = sceneSummary(p, show.routes);
+    const parts = [
+      p.values.length && `${p.values.length} value${p.values.length === 1 ? "" : "s"}${names.length ? ` on ${names.join(", ")}` : ""}`,
+      (on || off) && `routes: ${on} on, ${off} off`,
+    ].filter(Boolean);
+    return parts.join(" · ") || "does nothing yet";
+  }
+  let editingScene = $state<string | null>(null);
+  function addScene() {
+    const p = newScene(show, uid("pre"), presetName);
+    show.presets.push(p);
+    presetName = "";
+    editingScene = p.id;
+  }
+  function assignScene(p: Preset, source: "midi" | "key") {
+    const m: ControlMapping = {
+      id: uid("ctl"), name: p.name, enabled: true,
+      trigger: { source, kind: "note", channel: 0, number: 36, key: "", mode: "on" },
+      action: { type: "preset", preset: p.id },
+    };
+    show.controls.push(m);
+    learn(m.id);
+    toast(source === "key" ? "Press the key for this scene…" : "Press the pad for this scene…");
   }
   function removePreset(p: Preset) {
     show.presets.splice(show.presets.indexOf(p), 1);
@@ -158,6 +182,7 @@
         {#if midi?.error}<div class="small err">{midi.error}</div>{/if}
       {/if}
     </div>
+    <ControllerSetup />
     <div class="panel col">
       <h3>Incoming</h3>
       {#each app.midiLog.slice(0, 10) as e (e.at + e.number + e.kind + e.value)}
@@ -171,12 +196,16 @@
   <div class="col grow">
     <div class="panel col">
       <div class="row">
-        <h2 class="grow">Presets</h2>
-        <input bind:value={presetName} placeholder="Name for the current look" />
-        <label class="row small"><input type="checkbox" bind:checked={includeRoutes} /> include which routes are on</label>
-        <button class="primary" onclick={savePreset}>Save current look</button>
+        <h2 class="grow">Scenes and presets</h2>
+        <input bind:value={presetName} placeholder="Name" />
+        <button class="primary" onclick={addScene}>+ New scene</button>
+        <button onclick={savePreset} title="Save the channels you've set by hand (and optionally which routes are on)">Save current look</button>
+        <label class="row small"><input type="checkbox" bind:checked={includeRoutes} /> with route states</label>
       </div>
-      <span class="small muted">A preset stores the channels you've set by hand (Patch sliders, pattern browser, channel faders). Recalling it sets them again.</span>
+      <span class="small muted">
+        A scene switches route groups on and off: open <b>Edit scene</b> to choose. A preset can also hold channels you've set by hand
+        (Patch sliders, pattern browser, channel faders). Recall either from here, the Live screen, or a pad or key.
+      </span>
       {#each show.presets as p (p.id)}
         <div class="preset row" class:active={app.activePresets.includes(p.id)} style="--c:{p.color}">
           <input type="color" bind:value={p.color} />
@@ -184,11 +213,13 @@
           <span class="grow small faint">{describePreset(p)}</span>
           <label class="row small" title="Clear other manual values first"><input type="checkbox" bind:checked={p.exclusive} /> replace others</label>
           <button class="primary" onclick={() => invoke("preset_apply", { preset: p.id })}>Recall</button>
-          <button class="ghost" onclick={() => updatePreset(p)}>Update from current</button>
+          <button class:on={editingScene === p.id} onclick={() => (editingScene = editingScene === p.id ? null : p.id)}>Edit scene</button>
+          <button class="ghost" onclick={() => updatePreset(p)} title="Replace its hand-set channels (and route states, if it has them) with what's set now">Update from current</button>
           <ConfirmButton onconfirm={() => removePreset(p)}>Delete</ConfirmButton>
         </div>
+        {#if editingScene === p.id}<SceneEditor preset={p} onassign={(src) => assignScene(p, src)} />{/if}
       {:else}
-        <span class="small faint">No presets yet.</span>
+        <span class="small faint">No scenes or presets yet. Start with <b>+ New scene</b>, or build a whole setup on the Design screen.</span>
       {/each}
     </div>
 
@@ -306,8 +337,12 @@
 
 <style>
   .ctl { display: flex; gap: 16px; align-items: flex-start; }
-  .side { width: 280px; flex-shrink: 0; }
+  .side { width: 300px; flex-shrink: 0; }
+  button.on { background: var(--accent-bg); border-color: var(--accent); }
   .preset { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); border-left: 4px solid var(--c); }
+  .preset .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 1200px) { .preset { flex-wrap: wrap; } .preset .grow { min-width: 140px; } }
+  .preset button { white-space: nowrap; }
   .preset.active { background: color-mix(in srgb, var(--c) 14%, transparent); }
   .pname { width: 180px; }
   .mapping { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; transition: border-color 120ms; }

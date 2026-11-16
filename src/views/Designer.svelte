@@ -2,6 +2,10 @@
   import type { DesignResult } from "../lib/design";
   // Kept across view switches so a design isn't lost when you look at Routes.
   const saved = $state({
+    mode: "" as "" | "template" | "ai",
+    template: "club",
+    profile: "",
+    fromTemplate: false,
     prompt: "",
     genre: "",
     scope: { routes: true, presets: true, audio: true, palettes: true, controls: true },
@@ -20,8 +24,10 @@
   import { onMount } from "svelte";
   import { app, toast } from "../lib/store.svelte";
   import { GENRES, applyGenre } from "../lib/genres";
-  import { aiCounts, applyPlan, describeRoute, describeTrigger, type DesignRequest } from "../lib/design";
-  import type { AiSettings, ControlMapping, Show } from "../lib/types";
+  import { aiCounts, applyPlan, describeRoute, describeTrigger, type DesignRequest, type Plan } from "../lib/design";
+  import { TEMPLATES, buildTemplate } from "../lib/templates";
+  import { BUILTIN_CONTROLLERS, DEFAULT_AUTOMAP, automap } from "../lib/controllers";
+  import type { AiSettings, ControlMapping, ControllerProfile, Show } from "../lib/types";
 
   const show = app.show!;
   const s = saved;
@@ -32,8 +38,14 @@
   let started = $state(0);
   let now = $state(Date.now());
 
+  let userProfiles = $state<ControllerProfile[]>([]);
+  const profiles = $derived([...userProfiles, ...BUILTIN_CONTROLLERS]);
   onMount(() => {
-    invoke<AiSettings>("get_ai_settings").then((a) => (configured = !!a.base_url && (!!a.api_key || a.auth === "none"))).catch(() => {});
+    invoke<AiSettings>("get_ai_settings").then((a) => {
+      configured = !!a.base_url && (!!a.api_key || a.auth === "none");
+      s.mode ||= configured ? "ai" : "template";
+    }).catch(() => (s.mode ||= "template"));
+    invoke<ControllerProfile[]>("get_controller_profiles").then((p) => (userProfiles = p)).catch(() => {});
     const t = setInterval(() => (now = Date.now()), 1000);
     // Dev only: ?autodesign runs the (mocked) generator so screenshots can show a result.
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("autodesign") && !s.result) {
@@ -77,25 +89,54 @@
     };
     try {
       const r = await invoke<DesignResult>("ai_design", { show: base, request });
-      // Genre tuning is part of the plan too (the model may retune on top of it).
-      if (genre && s.scope.audio) {
-        for (const b of base.audio.bands) {
-          const before = show.audio.bands.find((x) => x.id === b.id);
-          const changed = !before || JSON.stringify(before) !== JSON.stringify(b);
-          if (changed && !r.plan.bands.some((x) => x.id === b.id)) r.plan.bands.push(b);
-        }
-        r.plan.sensitivity ??= base.audio.sensitivity;
-      }
-      s.result = r;
-      s.keep = [
-        ...r.plan.routes.map((x) => x.id), ...r.plan.presets.map((x) => x.id), ...r.plan.controls.map((x) => x.id),
-        ...r.plan.palettes.map((x) => x.id), ...r.plan.bands.map((b) => `band:${b.id}`), "sensitivity",
-      ];
+      if (s.scope.audio) addGenreBands(r.plan, base);
+      show_result(r, false);
       if (previous) refine = "";
     } catch (e) {
       error = String(e);
     }
     busy = false;
+  }
+
+  /** Genre tuning is part of the plan too (an AI design may retune on top of it). */
+  function addGenreBands(plan: Plan, base: Show) {
+    if (!genre) return;
+    for (const b of base.audio.bands) {
+      const before = show.audio.bands.find((x) => x.id === b.id);
+      const changed = !before || JSON.stringify(before) !== JSON.stringify(b);
+      if (changed && !plan.bands.some((x) => x.id === b.id)) plan.bands.push(b);
+    }
+    plan.sensitivity ??= base.audio.sensitivity;
+  }
+
+  function show_result(r: DesignResult, fromTemplate: boolean) {
+    s.result = r;
+    s.fromTemplate = fromTemplate;
+    s.keep = [
+      ...r.plan.routes.map((x) => x.id), ...r.plan.presets.map((x) => x.id), ...r.plan.controls.map((x) => x.id),
+      ...r.plan.palettes.map((x) => x.id), ...r.plan.bands.map((b) => `band:${b.id}`), "sensitivity",
+    ];
+  }
+
+  /** Build a setup from a template: no AI, same checks and review. */
+  async function buildFromTemplate() {
+    error = "";
+    const base: Show = $state.snapshot(show) as Show;
+    if (genre) applyGenre(base, genre);
+    const plan = buildTemplate(base, s.template, genre);
+    if (!plan.routes.length) { error = "Nothing to build: add fixtures with brightness/colour channels, or lasers with saved looks, first."; return; }
+    addGenreBands(plan, base);
+    const profile = profiles.find((p) => p.id === s.profile) ?? null;
+    if (profile || s.keyboard) {
+      const opts = { ...DEFAULT_AUTOMAP, groups: false, keys: s.keyboard };
+      plan.controls = automap(base, profile, opts, plan.routes, plan.presets).assigned.map((a) => ({ ...a.control, name: `${a.control.name} (${a.input})` }));
+    }
+    try {
+      const r = await invoke<DesignResult>("design_check", { show: base, plan });
+      show_result(r, true);
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   function toggle(id: string) {
@@ -117,7 +158,7 @@
     app.show = JSON.parse(s.undo);
     s.undo = "";
     app.epoch++;
-    toast("Undid the AI design");
+    toast("Undid the design");
   }
 
   function tuneOnly() {
@@ -155,19 +196,38 @@
 <div class="designer">
   <div class="panel col form">
     <h2>Design a show</h2>
-    <p class="muted small">
-      Describe the night and the AI writes routes, scenes, detection tuning and controller mappings for the rig you've set up:
-      your fixtures, groups, rooms, focus points and saved looks. You review everything before it's added.
-    </p>
-    {#if !configured}
-      <div class="tag warn note">Set up an AI provider first. <button class="ghost" onclick={() => (app.view = "ai")}>Open AI settings</button></div>
-    {/if}
-
-    <label for="d-prompt">What do you want?</label>
-    <textarea id="d-prompt" rows="5" bind:value={s.prompt} placeholder="e.g. Friday club night: start mellow, build to a big peak around midnight. Keep the laser for drops only."></textarea>
-    <div class="ideas">
-      {#each IDEAS as idea}<button class="ghost small" onclick={() => (s.prompt = idea)}>{idea.split(":")[0]}</button>{/each}
+    <div class="modes">
+      <button class:on={s.mode === "template"} onclick={() => (s.mode = "template")}>Templates <span class="faint small">no AI</span></button>
+      <button class:on={s.mode === "ai"} onclick={() => (s.mode = "ai")}>AI designer</button>
     </div>
+
+    {#if s.mode === "template"}
+      <p class="muted small">
+        Ready-made scene layouts built from your rig: your fixture groups, focus points and laser looks. Works offline.
+        You review everything before it's added, and it's all editable afterwards.
+      </p>
+      <div class="templates">
+        {#each TEMPLATES as t}
+          <label class="tpl" class:on={s.template === t.id}>
+            <input type="radio" name="tpl" value={t.id} bind:group={s.template} />
+            <span class="col"><b>{t.name}</b><span class="small muted">{t.description}</span></span>
+          </label>
+        {/each}
+      </div>
+    {:else}
+      <p class="muted small">
+        Describe the night and the AI writes routes, scenes, detection tuning and controller mappings for the rig you've set up:
+        your fixtures, groups, rooms, focus points and saved looks. You review everything before it's added.
+      </p>
+      {#if !configured}
+        <div class="tag warn note">Set up an AI provider first, or use Templates. <button class="ghost" onclick={() => (app.view = "ai")}>AI settings</button></div>
+      {/if}
+      <label for="d-prompt">What do you want?</label>
+      <textarea id="d-prompt" rows="5" bind:value={s.prompt} placeholder="e.g. Friday club night: start mellow, build to a big peak around midnight. Keep the laser for drops only."></textarea>
+      <div class="ideas">
+        {#each IDEAS as idea}<button class="ghost small" onclick={() => (s.prompt = idea)}>{idea.split(":")[0]}</button>{/each}
+      </div>
+    {/if}
 
     <label for="d-genre">Genre</label>
     <div class="row">
@@ -175,40 +235,51 @@
         <option value="">Any / mixed</option>
         {#each GENRES as g}<option value={g.id}>{g.name} ({g.bpm[0]}–{g.bpm[1]} BPM)</option>{/each}
       </select>
-      {#if genre}<button onclick={tuneOnly} title="Apply this genre's detection tuning now, without AI">Tune detection only</button>{/if}
+      {#if genre}<button onclick={tuneOnly} title="Apply this genre's detection tuning now">Tune detection only</button>{/if}
     </div>
     {#if genre}<p class="faint small">{genre.style}</p>{/if}
 
-    <span class="label">Generate</span>
-    <div class="checks">
-      <label><input type="checkbox" bind:checked={s.scope.routes} /> Routes and scenes</label>
-      <label><input type="checkbox" bind:checked={s.scope.presets} /> Scene presets</label>
-      <label><input type="checkbox" bind:checked={s.scope.audio} /> Audio detection tuning</label>
-      <label><input type="checkbox" bind:checked={s.scope.palettes} /> Colour palettes</label>
-      <label><input type="checkbox" bind:checked={s.scope.controls} /> MIDI and key mappings</label>
-    </div>
-
-    {#if s.scope.controls}
-      <div class="row">
-        <div class="col grow">
-          <label for="d-ctl">MIDI controller</label>
-          <input id="d-ctl" bind:value={s.controller} placeholder="e.g. Akai APC mini mk2, Novation Launchpad X, none" />
-        </div>
-        <div class="col">
-          <label for="d-ch">Channel</label>
-          <select id="d-ch" bind:value={s.midiChannel}>
-            <option value={0}>Any</option>
-            {#each Array.from({ length: 16 }, (_, i) => i + 1) as c}<option value={c}>{c}</option>{/each}
-          </select>
-        </div>
+    {#if s.mode === "template"}
+      <label for="d-prof">MIDI controller</label>
+      <select id="d-prof" bind:value={s.profile}>
+        <option value="">None</option>
+        {#each profiles as p}<option value={p.id}>{p.name}{p.builtin ? "" : " (yours)"}</option>{/each}
+      </select>
+      <span class="faint small">Maps the scenes, strobe, fog, master, group brightness and band sensitivity to it. Make your own profile on the Control screen.</span>
+      <label class="inline"><input type="checkbox" bind:checked={s.keyboard} /> Also map keyboard keys (1–9 for scenes, S strobe, F fog)</label>
+      <div class="row go">
+        <button class="primary" onclick={buildFromTemplate}>Build setup</button>
       </div>
-      <label class="inline"><input type="checkbox" bind:checked={s.keyboard} /> Also map keyboard keys</label>
+    {:else}
+      <span class="label">Generate</span>
+      <div class="checks">
+        <label><input type="checkbox" bind:checked={s.scope.routes} /> Routes and scenes</label>
+        <label><input type="checkbox" bind:checked={s.scope.presets} /> Scene presets</label>
+        <label><input type="checkbox" bind:checked={s.scope.audio} /> Audio detection tuning</label>
+        <label><input type="checkbox" bind:checked={s.scope.palettes} /> Colour palettes</label>
+        <label><input type="checkbox" bind:checked={s.scope.controls} /> MIDI and key mappings</label>
+      </div>
+      {#if s.scope.controls}
+        <div class="row">
+          <div class="col grow">
+            <label for="d-ctl">MIDI controller</label>
+            <input id="d-ctl" bind:value={s.controller} placeholder="e.g. Akai APC mini mk2, Novation Launchpad X, none" />
+          </div>
+          <div class="col">
+            <label for="d-ch">Channel</label>
+            <select id="d-ch" bind:value={s.midiChannel}>
+              <option value={0}>Any</option>
+              {#each Array.from({ length: 16 }, (_, i) => i + 1) as c}<option value={c}>{c}</option>{/each}
+            </select>
+          </div>
+        </div>
+        <label class="inline"><input type="checkbox" bind:checked={s.keyboard} /> Also map keyboard keys</label>
+      {/if}
+      <div class="row go">
+        <button class="primary" onclick={() => generate(false)} disabled={busy || !configured}>{busy ? "Designing…" : "Generate design"}</button>
+        {#if busy}<span class="muted small">{Math.max(0, Math.round((now - started) / 1000))} s · big designs can take a few minutes</span>{/if}
+      </div>
     {/if}
-
-    <div class="row go">
-      <button class="primary" onclick={() => generate(false)} disabled={busy || !configured}>{busy ? "Designing…" : "Generate design"}</button>
-      {#if busy}<span class="muted small">{Math.max(0, Math.round((now - started) / 1000))} s · big designs can take a few minutes</span>{/if}
-    </div>
     {#if error}<p class="err small">{error}</p>{/if}
   </div>
 
@@ -217,7 +288,7 @@
       <div class="empty col">
         <span class="big">✧</span>
         <span>Your design will appear here to review.</span>
-        <span class="faint small">Tip: name your fixture groups and focus points, and tag your laser looks (chill, peak…) first. The AI uses all of it.</span>
+        <span class="faint small">Tip: name your fixture groups, add focus points, and tag your laser looks (chill, peak…) first. Templates and the AI both use them.</span>
       </div>
     {:else}
       <div class="row">
@@ -297,18 +368,18 @@
       </div>
 
       <div class="row foot">
-        <label class="inline small" title="Remove routes, scenes and controls from earlier AI designs before adding these">
+        <label class="inline small" title="Remove routes, scenes and controls from earlier generated designs (templates or AI) before adding these">
           <input type="checkbox" checked={s.replace && priorTotal > 0} onchange={(e) => (s.replace = e.currentTarget.checked)} disabled={!priorTotal} />
-          Replace earlier AI designs{priorTotal ? ` (${prior.routes} routes, ${prior.presets} scenes, ${prior.controls} controls)` : ""}
+          Replace earlier generated designs{priorTotal ? ` (${prior.routes} routes, ${prior.presets} scenes, ${prior.controls} controls)` : ""}
         </label>
         <div class="grow"></div>
         <button class="primary" onclick={apply} disabled={!s.keep.length}>Add to show</button>
       </div>
-      <div class="row">
+      {#if !s.fromTemplate}<div class="row">
         <input class="grow" bind:value={refine} placeholder="Refine it: “fewer strobes”, “add a fog button”, “use pads 56–63 for scenes”…"
           onkeydown={(e) => e.key === "Enter" && refine.trim() && generate(true)} />
-        <button onclick={() => generate(true)} disabled={busy || !refine.trim()}>{busy ? "Working…" : "Refine"}</button>
-      </div>
+        <button onclick={() => generate(true)} disabled={busy || !refine.trim() || !configured}>{busy ? "Working…" : "Refine"}</button>
+      </div>{/if}
     {/if}
   </div>
 </div>
@@ -318,6 +389,13 @@
   .form label, .form .label { margin-top: 6px; }
   .label { font-size: 12px; color: var(--muted, #9aa4b8); }
   textarea { resize: vertical; font: inherit; }
+  .modes { display: flex; gap: 4px; }
+  .modes button { flex: 1; }
+  .modes button.on { background: var(--accent-bg); border-color: var(--accent); }
+  .templates { display: flex; flex-direction: column; gap: 6px; }
+  .tpl { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--line-2); border-radius: 8px; margin: 0; cursor: pointer; }
+  .tpl.on { border-color: var(--accent); background: var(--accent-bg); }
+  .tpl input { margin-top: 3px; }
   .ideas { display: flex; flex-wrap: wrap; gap: 4px; }
   .ideas button { padding: 2px 8px; font-size: 12px; border: 1px solid var(--line-2); border-radius: 999px; }
   .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }

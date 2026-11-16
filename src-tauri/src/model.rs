@@ -161,6 +161,29 @@ impl Default for ControlAction {
     }
 }
 
+/// A MIDI controller layout: its pads/buttons and faders/knobs in the order they're
+/// assigned by auto-mapping. Built-in profiles live in the UI; your own are saved app-wide.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct ControllerProfile {
+    pub id: String,
+    pub name: String,
+    /// MIDI channel it sends on (0 = any).
+    pub channel: u8,
+    pub pads: Vec<ControllerInput>,
+    pub faders: Vec<ControllerInput>,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct ControllerInput {
+    /// "note" | "cc"
+    pub kind: String,
+    pub number: u8,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct FixtureGroup {

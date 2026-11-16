@@ -4,8 +4,10 @@
   import PatternBrowser from "../components/PatternBrowser.svelte";
   import LookManager from "../components/LookManager.svelte";
   import ConfirmButton from "../components/ConfirmButton.svelte";
-  import { app } from "../lib/store.svelte";
+  import { onMount } from "svelte";
+  import { app, toast } from "../lib/store.svelte";
   import { GROUPS, KINDS, type Profile } from "../lib/types";
+  import { addCopy, compare, describeDiff, mergeInto, saveToLibrary } from "../lib/library";
 
   const show = app.show!;
   let selectedId = $state<string | null>(show.profiles[0]?.id ?? null);
@@ -15,6 +17,79 @@
   let tab = $state<"channels" | "browser" | "patterns">(devTab === "browser" || devTab === "patterns" ? devTab : "channels");
   let msg = $state("");
   const sel = $derived(show.profiles.find((p) => p.id === selectedId));
+
+  // ----- fixture library (app-wide) -----
+  let library = $state<Profile[]>([]);
+  let listMode = $state<"project" | "library">("project");
+  let libSelId = $state<string | null>(null);
+  onMount(async () => {
+    try { library = await invoke<Profile[]>("get_fixture_library"); } catch {}
+  });
+  const libSel = $derived(library.find((p) => p.id === libSelId) ?? null);
+  const libEntry = (id: string) => library.find((p) => p.id === id) ?? null;
+  const inProject = (id: string) => show.profiles.find((p) => p.id === id) ?? null;
+  async function storeLibrary(next: Profile[]) {
+    await invoke("save_fixture_library", { library: next });
+    library = next;
+  }
+  async function toLibrary(p: Profile) {
+    const had = !!libEntry(p.id);
+    const { library: next, result } = saveToLibrary($state.snapshot(library) as Profile[], $state.snapshot(p) as Profile);
+    await storeLibrary(next);
+    msg = !had ? `Saved ${p.model} to the library` : `Updated ${p.model} in the library${result ? `: ${result.added} new, ${result.updated} changed look(s)` : ""}`;
+  }
+  function fromLibrary(target: Profile, lib: Profile) {
+    const r = mergeInto(target, $state.snapshot(lib) as Profile);
+    msg = `Updated ${target.model} from the library: ${r.added} new, ${r.updated} changed look(s)${r.kept ? `, kept ${r.kept} of this project's own` : ""}${r.definition ? "; channels and tags now match the library" : ""}`;
+  }
+  function addFromLibrary(lib: Profile) {
+    const c = addCopy(show.profiles, $state.snapshot(lib) as Profile);
+    listMode = "project";
+    selectedId = c.id;
+    msg = `Added ${c.model} to this project`;
+  }
+  async function removeFromLibrary(p: Profile) {
+    await storeLibrary((($state.snapshot(library)) as Profile[]).filter((x) => x.id !== p.id));
+    libSelId = null;
+  }
+  async function exportFile(profiles: Profile[], name: string) {
+    try {
+      const path = await invoke<string | null>("fixture_export", { profiles: $state.snapshot(profiles), name });
+      if (path) msg = `Exported to ${path}`;
+    } catch (e) { msg = String(e); }
+  }
+
+  // ----- importing LightDeck fixture files -----
+  /** Types from a file whose id is already in the project, waiting for "merge" or "copy". */
+  let conflicts = $state<Profile[]>([]);
+  async function importFixtureFile(e: Event, into: "project" | "library") {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    let found: Profile[];
+    try { found = await invoke<Profile[]>("parse_fixture_file", { text: await file.text() }); }
+    catch (err) { msg = `${file.name}: ${err}`; return; }
+    if (into === "library") {
+      let next = $state.snapshot(library) as Profile[];
+      for (const p of found) next = saveToLibrary(next, p).library;
+      await storeLibrary(next);
+      msg = `Imported ${found.length} type(s) into the library`;
+      return;
+    }
+    const added: string[] = [];
+    for (const p of found) {
+      if (inProject(p.id)) conflicts.push(p);
+      else { show.profiles.push(p); added.push(p.model); selectedId = p.id; }
+    }
+    msg = [added.length && `Imported ${added.join(", ")}`, conflicts.length && `${conflicts.length} already in this project: choose below`].filter(Boolean).join(". ");
+  }
+  function resolve(p: Profile, how: "merge" | "copy" | "skip") {
+    conflicts = conflicts.filter((c) => c !== p);
+    const existing = inProject(p.id);
+    if (how === "merge" && existing) { mergeInto(existing, $state.snapshot(p) as Profile); selectedId = existing.id; toast(`Merged into ${existing.model}`); }
+    if (how === "copy") selectedId = addCopy(show.profiles, $state.snapshot(p) as Profile).id;
+  }
 
   // ----- import -----
   async function importFiles(e: Event) {
@@ -48,16 +123,6 @@
     if (used) { msg = `${p.model} is used by ${used} patched fixture(s); remove those first.`; return; }
     show.profiles.splice(show.profiles.indexOf(p), 1);
     selectedId = show.profiles[0]?.id ?? null;
-  }
-  async function exportProfile(p: Profile) {
-    await navigator.clipboard.writeText(JSON.stringify($state.snapshot(p), null, 2));
-    msg = `Copied ${p.model} as LightDeck JSON to the clipboard`;
-  }
-  async function importJson(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    try { addProfile(JSON.parse(await file.text())); msg = "Imported LightDeck profile"; }
-    catch (err) { msg = String(err); }
   }
 
   // ----- AI -----
@@ -94,18 +159,74 @@
 <div class="lib">
   <div class="col list">
     <h2>Fixture types</h2>
-    {#each show.profiles as p}
-      <button class="item" class:on={p.id === selectedId} onclick={() => (selectedId = p.id)}>
-        <span>{p.model}</span><span class="faint small">{p.manufacturer} · {p.kind}</span>
-      </button>
-    {/each}
-    <label class="file"><input type="file" accept=".qxf,.xml" multiple onchange={importFiles} />Import QLC+ .qxf</label>
-    <label class="file"><input type="file" accept=".json" onchange={importJson} />Import LightDeck .json</label>
-    <button onclick={() => (aiOpen = !aiOpen)} class:on={aiOpen}>✦ Interpret with AI</button>
+    <div class="modes">
+      <button class:on={listMode === "project"} onclick={() => (listMode = "project")}>This project <span class="faint">{show.profiles.length}</span></button>
+      <button class:on={listMode === "library"} onclick={() => (listMode = "library")}>Library <span class="faint">{library.length}</span></button>
+    </div>
+    {#if listMode === "project"}
+      {#each show.profiles as p}
+        {@const l = libEntry(p.id)}
+        <button class="item" class:on={p.id === selectedId} onclick={() => (selectedId = p.id)}>
+          <span>{p.model}{#if l}<span class="lib-dot" class:diff={!compare(p, l).same} title={compare(p, l).same ? "In the library, same" : "In the library, differs"}>●</span>{/if}</span>
+          <span class="faint small">{p.manufacturer} · {p.kind}</span>
+        </button>
+      {/each}
+      <label class="file"><input type="file" accept=".qxf,.xml" multiple onchange={importFiles} />Import QLC+ .qxf</label>
+      <label class="file"><input type="file" accept=".lightdeck-fixture,.json,.lightdeck,.lightdeck-settings" onchange={(e) => importFixtureFile(e, "project")} />Import LightDeck fixture</label>
+      <button onclick={() => (aiOpen = !aiOpen)} class:on={aiOpen}>✦ Interpret with AI</button>
+    {:else}
+      {#each library as p}
+        <button class="item" class:on={p.id === libSelId} onclick={() => (libSelId = p.id)}>
+          <span>{p.model}{#if inProject(p.id)}<span class="faint small"> · in project</span>{/if}</span>
+          <span class="faint small">{p.manufacturer} · {p.kind} · {p.looks.length} looks</span>
+        </button>
+      {:else}
+        <span class="small faint">Empty. Open a fixture type in this project and click <b>Save to library</b>.</span>
+      {/each}
+      <label class="file"><input type="file" accept=".lightdeck-fixture,.json,.lightdeck,.lightdeck-settings" onchange={(e) => importFixtureFile(e, "library")} />Import into library</label>
+      {#if library.length}<button onclick={() => exportFile(library, "LightDeck library")}>Export whole library…</button>{/if}
+    {/if}
     {#if msg}<div class="small muted">{msg}</div>{/if}
   </div>
 
   <div class="col grow">
+    {#each conflicts as c (c)}
+      <div class="panel row conflict">
+        <span class="grow"><b>{c.model}</b> is already in this project. Merge the file's version into it (its channels and tags, new and changed looks; this project's own looks are kept), or add it as a separate type?</span>
+        <button class="primary" onclick={() => resolve(c, "merge")}>Merge</button>
+        <button onclick={() => resolve(c, "copy")}>Add as copy</button>
+        <button class="ghost" onclick={() => resolve(c, "skip")}>Skip</button>
+      </div>
+    {/each}
+
+    {#if listMode === "library"}
+      {#if libSel}
+        {@const here = inProject(libSel.id)}
+        <div class="panel col">
+          <div class="row">
+            <h2 class="grow">{libSel.manufacturer} {libSel.model}</h2>
+            <button onclick={() => exportFile([libSel], libSel.model)}>Export…</button>
+            <ConfirmButton class="danger" onconfirm={() => removeFromLibrary(libSel)}>Remove from library</ConfirmButton>
+          </div>
+          <span class="small muted">{libSel.kind} · {libSel.channels.length} channels · {libSel.modes.length} mode(s) · {libSel.looks.filter((l) => !l.builtin).length} saved looks{libSel.look_sets.length ? ` · sets: ${libSel.look_sets.map((x) => x.name).join(", ")}` : ""}</span>
+          {#if here}
+            <div class="row">
+              <span class="grow small">In this project: {describeDiff(compare(here, libSel), "library")}</span>
+              {#if !compare(here, libSel).same}<button class="primary" onclick={() => fromLibrary(here, libSel)}>Update this project's copy</button>{/if}
+              <button onclick={() => { listMode = "project"; selectedId = here.id; }}>Open</button>
+            </div>
+          {:else}
+            <div class="row"><span class="grow small muted">Not in this project.</span><button class="primary" onclick={() => addFromLibrary(libSel)}>Add to this project</button></div>
+          {/if}
+          <span class="small faint">Library types are edited in a project: add or open it there, make changes, then click Save to library.</span>
+        </div>
+      {:else}
+        <div class="empty panel col">
+          <span>The fixture library keeps fixture types and their looks for every project.</span>
+          <span class="small faint">Projects copy from it, so a project file always works on its own and changing the library never changes an existing show. Pick a type on the left.</span>
+        </div>
+      {/if}
+    {:else}
     {#if aiOpen}
       <div class="panel col">
         <div class="row"><h2 class="grow">Interpret with AI</h2><button class="ghost" onclick={() => (app.view = "ai")}>AI settings</button></div>
@@ -134,9 +255,25 @@
           <input class="grow" bind:value={sel.model} placeholder="Model" />
           <select bind:value={sel.kind}>{#each KINDS as k}<option>{k}</option>{/each}</select>
           <button onclick={aiRetag}>✦ AI tag</button>
-          <button onclick={() => exportProfile(sel)}>Copy JSON</button>
+          <button onclick={() => exportFile([sel], sel.model)}>Export…</button>
           <ConfirmButton class="danger" onconfirm={() => removeProfile(sel)}>Delete</ConfirmButton>
         </div>
+        {#if libEntry(sel.id)}
+          {@const lib = libEntry(sel.id)!}
+          {@const d = compare(sel, lib)}
+          <div class="row small libstat">
+            <span class="grow">Library: {describeDiff(d, "library")}</span>
+            {#if !d.same}
+              <button onclick={() => toLibrary(sel)} title="Copy this project's version to the library (library-only looks are kept)">Save to library</button>
+              <button onclick={() => fromLibrary(sel, lib)} title="Take the library's channels and tags, and its new and changed looks (this project's own looks are kept)">Update from library</button>
+            {/if}
+          </div>
+        {:else}
+          <div class="row small libstat">
+            <span class="grow muted">Not in the library yet. Save it to reuse it, with its looks, in other projects.</span>
+            <button onclick={() => toLibrary(sel)}>Save to library</button>
+          </div>
+        {/if}
         <div class="row small muted">
           {#each sel.modes as m}<span class="tag">{m.name}: {m.channels.length} ch{m.heads.length ? `, ${m.heads.length} projectors` : ""}</span>{/each}
           <span class="grow"></span>
@@ -191,7 +328,8 @@
         </div>
       {/if}
     {:else}
-      <div class="empty panel">Import a QLC+ fixture or interpret one with AI to get started.</div>
+      <div class="empty panel">Import a QLC+ fixture, add one from the Library, or interpret one with AI to get started.</div>
+    {/if}
     {/if}
   </div>
 </div>
@@ -208,5 +346,12 @@
   .caps .lbl { min-width: 240px; }
   .caps tr.blk td { background: #ff5c6c0c; }
   .sw { display: inline-block; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line-2); }
+  .modes { display: flex; gap: 4px; }
+  .modes button { flex: 1; font-size: 12px; padding: 4px 6px; }
+  .modes button.on, .item.on { background: var(--accent-bg); border-color: var(--accent); }
+  .lib-dot { color: var(--ok, #45d39a); font-size: 9px; margin-left: 6px; vertical-align: middle; }
+  .lib-dot.diff { color: var(--warn, #f2b54a); }
+  .libstat { border-top: 1px solid var(--line); padding-top: 6px; }
+  .conflict { border-color: var(--warn); align-items: center; }
   .result { background: var(--accent-bg); border-color: #7c5cff55; }
 </style>

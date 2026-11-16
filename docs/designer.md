@@ -1,6 +1,37 @@
-# AI show designer
+# Show designer
 
-The **Design** screen writes a show for the rig you've set up. Describe the night, pick a genre and your MIDI controller, and the AI proposes:
+The **Design** screen builds a show for the rig you've set up, in one of two ways:
+
+- **Templates** (no AI) build ready-made scene layouts from your rig with fixed rules. They work offline and give the same result every time.
+- **AI designer** writes a design from your own description.
+
+Both give you a design to review, untick, add and undo in the same way. Everything they add is ordinary routes, scenes and controls that you can edit afterwards, or build by hand instead (see [Live control](control.md#scenes-and-presets)).
+
+## Templates
+
+Pick a template, optionally a genre and a MIDI controller, and click **Build setup**.
+
+| Template | Scenes |
+|---|---|
+| Club night | Warm-up (slow wave, hi-hat sparkle), Build (colour each bar, energy lifts brightness), Drop (kick colour hits, snare strobe, peak laser looks, fog burst), Breakdown (lights breathe with vocals, drifting colour) |
+| Party | Groove (kick colour steps, sparkle), Peak (fast rings, node hop, strobe, fog) |
+| Chill / lounge | Glow and Drift: long fades and slow waves; no strobe or fog |
+| Test my rig | One scene: every group flashes on the kick, colour changes each bar, lasers change look. For checking patching and detection |
+
+Templates read the rig:
+
+- **Colour fixtures** are fixtures with brightness or colour channels, apart from lasers and fog. They're targeted with your fixture groups where those fit, and call-and-response effects use two of your groups as halves.
+- **Lasers** are fixtures with saved looks. Templates use looks tagged `chill` or `peak` when you have them, otherwise any look.
+- **Fog** gets short bursts on the drop, at most every 45 seconds.
+- **Focus points** make waves and colour hits ripple out from the first focus point.
+- **Genre** tunes detection and picks the palettes. Drum & bass gets a slower strobe, and Ambient removes strobe entirely.
+- **MIDI controller** maps the scenes, strobe, fog, master, group brightness and band sensitivity to the controller (see [Controller setup](control.md#controller-setup)).
+
+The design summary says what would improve the result, for example tagging laser looks or adding a focus point.
+
+## AI designer
+
+Describe the night, pick a genre and your MIDI controller, and the AI proposes:
 
 - **Audio detection tuning:** band sensitivity, timing and extra bands for the music.
 - **Colour palettes** for the mood.
@@ -10,7 +41,7 @@ The **Design** screen writes a show for the rig you've set up. Describe the nigh
 
 Nothing changes until you click **Add to show**. You review the design first and untick anything you don't want.
 
-It needs an AI provider. Set one up on the **AI** screen (see [Fixture types](fixtures.md) for the same setup).
+It needs an AI provider. Set one up on the **AI** screen (see [Fixture types](fixtures.md) for the same setup). Without one, the Design screen opens on Templates.
 
 ## What the AI knows about your rig
 
@@ -54,11 +85,11 @@ Anything fixed or skipped is listed under **things were fixed or skipped**.
 - MIDI input is switched on if the design maps MIDI.
 - Only the starting scene's routes are on. Use the scene presets, or your controller, to move between scenes.
 
-**Replace earlier AI designs** first removes routes, presets and controls from previous designs. Your own work is never removed. AI-made items have ids starting with `ai-`, so they're kept apart even after you edit them.
+**Replace earlier generated designs** first removes routes, presets and controls from previous designs (templates or AI). Your own work is never removed. Generated items have ids starting with `ai-`, so they're kept apart even after you edit them.
 
 **Undo apply** puts the show back as it was before the last **Add to show**.
 
-## Refining
+## Refining (AI)
 
 Type a change under the design, such as "fewer strobes", "add a fog button" or "use pads 56–63 for scenes", and click **Refine**. The AI revises the current design and keeps the parts you didn't mention. Review it again, then add it.
 

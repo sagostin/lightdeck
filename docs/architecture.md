@@ -28,7 +28,12 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/lib/store.svelte.ts` | Global state (`app`), save debouncing, project actions, target helpers, control-state sync |
 | `src/lib/types.ts` | TypeScript mirror of the Rust model, plus presets and labels |
 | `src/lib/genres.ts` | Genre presets: detection tuning and lighting-style notes |
-| `src/lib/design.ts` | AI design plan types, applying a plan to the show, preview text |
+| `src/lib/design.ts` | Design plan types, applying a plan to the show, preview text |
+| `src/lib/templates.ts` | Setup templates: rule-based plans built from the rig |
+| `src/lib/controllers.ts` | Built-in controller layouts, auto-mapping, learning profiles |
+| `src/lib/scenes.ts` | Scene (preset route state) editing helpers |
+| `src/lib/library.ts` | Fixture library: comparing and merging fixture types and their looks |
+| `src/lib/rig.ts` | Reading fixture capabilities without app state (shared by templates and auto-mapping) |
 | `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Designer, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
 | `src/components/` | Shared UI: RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |
 | `src-tauri/src/model.rs` | The show format (serde), defaults, migrations |
@@ -113,10 +118,10 @@ The network keys are generated once into `zigbee/network.json` in the app data f
 The UI calls these through `invoke` (see `generate_handler!` in `lib.rs`):
 
 - **Show:** `get_show`, `save_show`, `import_qxf`
-- **Projects and settings:** `project_*`, `settings_*`, `get_band_presets`, `save_band_presets`
+- **Projects and settings:** `project_*`, `settings_*`, `get_band_presets`, `save_band_presets`, `get_controller_profiles`, `save_controller_profiles`, `get_fixture_library`, `save_fixture_library`, `fixture_export`, `parse_fixture_file`
 - **Manual and blackout:** `set_manual`, `clear_manual`, `get_manual`, `set_blackout`
 - **Audio:** `list_audio_devices`, `restart_audio`
-- **AI:** `get_ai_settings`, `save_ai_settings`, `ai_test`, `ai_interpret`, `ai_design` (takes the show and a design request, returns a checked plan and warnings; the UI applies it)
+- **AI:** `get_ai_settings`, `save_ai_settings`, `ai_test`, `ai_interpret`, `ai_design` (takes the show and a design request, returns a checked plan and warnings; the UI applies it), `design_check` (checks a template plan the same way, no AI)
 - **Zigbee:** `zigbee_status`, `zigbee_ports`, `zigbee_permit_join`, `zigbee_identify`, `zigbee_remove`, `zigbee_reinterview`, `zigbee_reconnect`, `zigbee_profiles`
 - **Control:** `midi_status`, `control_key`, `control_fire`, `control_state`, `preset_apply`, `set_master`
 
@@ -129,11 +134,11 @@ During development, opening `http://localhost:1420` in a normal browser (while `
 ```bash
 npm test                       # both of the below
 cd src-tauri && cargo test     # Rust: importer, Art-Net, migrations, targets, effects, Zigbee (incl. the real helper), MIDI, controls, AI designer
-npm run test:ui                # UI logic in tests/: genre presets, applying AI designs
+npm run test:ui                # UI logic in tests/: genre presets, applying designs, scenes, controller auto-mapping, templates, fixture library merging
 npm run check                  # UI type-check
 ```
 
-The UI tests use Node's built-in test runner on the TypeScript sources directly (Node 24+ strips the types; `tests/resolve-ts.mjs` resolves extensionless imports). They aren't type-checked.
+The UI tests use Node's built-in test runner on the TypeScript sources directly (Node 24+ strips the types; `tests/resolve-ts.mjs` resolves extensionless imports). They aren't type-checked. `tests/rig.ts` builds a club rig from the bundled laser and fog profiles, and `planProblems` checks that a plan only references things that exist; every template is run against several rig variants and genres.
 
 The AI designer tests never call a model. They check that the prompt documents every route and control action and field the data model has, so a new action fails the tests until the prompt describes it. They also check that plans are cleaned up against a rig: unknown ids, unreachable routes, out-of-range numbers, duplicate triggers, scope, and refining.
 
