@@ -27,6 +27,7 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
   - Targets are picked room first, then groups or devices, then channel.
 - **Limits that always apply:** lock values, clamp ranges, hold times and blocked values keep a laser below a low ceiling and away from its built-in auto/sound modes, whatever the routes do.
 - **Live control:** MIDI and keyboard mappings with Learn, saved presets, a master brightness fader and blackout.
+- **AI show designer:** describe the night, pick a genre and your MIDI controller, and get palettes, detection tuning, routes grouped into scenes, scene presets and controller mappings built for your rig. Review, untick, refine, then add. Genre presets for audio detection also work without AI.
 - **Outputs:** Art-Net to any node (e.g. PKnight). Zigbee lights work either through a USB dongle, with LightDeck as the coordinator (no hub or MQTT needed), or through an existing Zigbee2MQTT setup.
 - **Projects:** `.lightdeck` project files, autosave, and export/import of app settings.
 
@@ -36,7 +37,7 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
 |---|---|
 | [![Routes](docs/images/routes.png)](docs/images/routes.png) **Routes** connect hits and levels to channel actions and effects, grouped and targeted by room, group or device. | [![Audio](docs/images/audio.png)](docs/images/audio.png) **Audio** detection bands drawn on a live spectrum, with an onset trace for tuning hits. |
 | [![Rooms](docs/images/rooms.png)](docs/images/rooms.png) **Rooms** drawn to scale, with fixtures, beam directions and focus points. | [![Pattern browser](docs/images/browser.png)](docs/images/browser.png) **Pattern browser** steps through a laser's values on the real device so you can tag, rate and save looks. |
-| [![Control](docs/images/control.png)](docs/images/control.png) **Control** maps MIDI pads, faders and keys to routes, presets, master and blackout. | |
+| [![Control](docs/images/control.png)](docs/images/control.png) **Control** maps MIDI pads, faders and keys to routes, presets, master and blackout. | [![Design](docs/images/design.png)](docs/images/design.png) **Design** generates scenes, routes, detection tuning and controller mappings from a brief, for review before adding. |
 
 Screenshots use the built-in demo show (see [Development](#development)).
 
@@ -85,6 +86,7 @@ Pushing a `v*` tag to GitHub builds macOS, Windows and Linux installers automati
 | [Audio detection](docs/audio.md) | Input and gain, detection bands, tuning hits, BPM |
 | [Routes and effects](docs/routes.md) | Sources, actions, effects, palettes, targets, grouping |
 | [Live control](docs/control.md) | MIDI and keyboard mappings, presets, master, blackout |
+| [AI show designer](docs/designer.md) | Generating scenes, routes, detection tuning and MIDI mappings; genre presets |
 | [Zigbee lights](docs/zigbee.md) | USB dongle coordinator, pairing, Zigbee2MQTT mode, limits |
 | [Projects and settings](docs/projects-and-settings.md) | Project files, autosave, settings export, where data lives |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |
@@ -106,7 +108,7 @@ Any other key can be mapped to an action on the **Control** screen.
 
 ```bash
 npm run check                          # type-check the UI
-npm test                               # Rust: engine, importer, Zigbee, MIDI and effect tests
+npm test                               # UI logic tests, then Rust: engine, importer, Zigbee, MIDI, effects, AI designer
 ```
 
 With the dev server running (`npm run dev` or `npx tauri dev`), open the UI in a normal browser to work on screens without hardware:

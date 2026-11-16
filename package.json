@@ -8,7 +8,8 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test": "npm run test:ui && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:ui": "node --import ./tests/resolve-ts.mjs --test tests/*.test.ts",
     "release:build": "tauri build --config src-tauri/tauri.bundle.json",
     "version:set": "node scripts/version.mjs",
     "screenshots": "node scripts/screenshots.mjs"

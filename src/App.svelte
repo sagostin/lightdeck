@@ -12,6 +12,7 @@
   import AiSettings from "./views/AiSettings.svelte";
   import Zigbee from "./views/Zigbee.svelte";
   import Control from "./views/Control.svelte";
+  import Designer from "./views/Designer.svelte";
   import { invoke } from "@tauri-apps/api/core";
 
   const nav = [
@@ -20,6 +21,7 @@
     { id: "patch", label: "Patch", icon: "⌗" },
     { id: "library", label: "Fixture types", icon: "☰" },
     { id: "routes", label: "Routes", icon: "⇢" },
+    { id: "design", label: "Design", icon: "✧" },
     { id: "control", label: "Control", icon: "◎" },
     { id: "audio", label: "Audio", icon: "∿" },
     { id: "outputs", label: "Art-Net", icon: "⇄" },
@@ -119,6 +121,7 @@
       {:else if app.view === "patch"}<Patch />
       {:else if app.view === "library"}<Library />
       {:else if app.view === "routes"}<Routes />
+      {:else if app.view === "design"}<Designer />
       {:else if app.view === "audio"}<Audio />
       {:else if app.view === "outputs"}<Outputs />
       {:else if app.view === "zigbee"}<Zigbee />

@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (type check + build)
+    name: Frontend (type check, tests, build)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run test:ui
       - run: npm run build
 
   rust:

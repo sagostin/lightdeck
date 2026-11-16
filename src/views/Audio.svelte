@@ -5,6 +5,7 @@
   import ConfirmButton from "../components/ConfirmButton.svelte";
   import { app, toast } from "../lib/store.svelte";
   import { BAND_PRESETS, bandSpan, type BandDef, type BandPreset } from "../lib/types";
+  import { GENRES, applyGenre } from "../lib/genres";
 
   const show = app.show!;
   let devices = $state<string[]>([]);
@@ -59,6 +60,15 @@
     await invoke("save_band_presets", { presets: userPresets });
   }
   const out = (id: string) => f?.bands.find((o) => o.id === id);
+
+  function tuneFor(sel: HTMLSelectElement) {
+    const id = sel.value;
+    sel.value = "";
+    const g = GENRES.find((x) => x.id === id);
+    if (!g) return;
+    const changed = applyGenre(show, g);
+    toast(`Tuned for ${g.name}: ${changed.join(", ") || "sensitivity"}`);
+  }
 </script>
 
 <div class="col">
@@ -78,6 +88,10 @@
       <div class="meter"><i style="width:{(f?.level ?? 0) * 100}%"></i></div>
       <label>Global sensitivity <span class="mono">{Math.round(show.audio.sensitivity * 100)}%</span></label>
       <input type="range" min="0" max="1" step="0.01" bind:value={show.audio.sensitivity} />
+      <select onchange={(e) => tuneFor(e.currentTarget)} title="Retune the bands' sensitivity and timing for a style of music (adds a band or two where the genre needs it)">
+        <option value="">Tune for a genre…</option>
+        {#each GENRES as g}<option value={g.id}>{g.name} ({g.bpm[0]}–{g.bpm[1]} BPM)</option>{/each}
+      </select>
       <div class="small">
         {#if f?.running}<span class="tag accent">Listening</span> {f.device} · {f.sample_rate} Hz · {f.bpm.toFixed(1)} BPM
         {:else}<span class="tag warn">Not running</span> {f?.error ?? ""}{/if}

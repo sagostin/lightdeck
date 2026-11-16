@@ -59,6 +59,10 @@ The spectrum shows live audio from 20 Hz to 20 kHz with each band's ranges drawn
 
 **Save as preset** on a band card saves it for every project. Your presets appear in the Input panel, where you can delete them, and they're included when you [export settings](projects-and-settings.md#app-settings).
 
+### Tuning for a genre
+
+**Tune for a genre…** under Global sensitivity retunes the bands for a style of music: house, techno, trance, drum & bass, dubstep, hip-hop, reggaeton, pop, rock or ambient. It changes sensitivity and timing, and adds a band where the genre needs one (a Clap band for house, Sub-bass for dubstep). See [Genre presets](designer.md#genre-presets) for what each genre changes.
+
 ## Other sources
 
 Routes can also use:

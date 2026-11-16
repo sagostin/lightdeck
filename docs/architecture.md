@@ -27,7 +27,9 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/App.svelte` | Shell: sidebar, top bar (BPM, master, blackout), keyboard handling, autosave |
 | `src/lib/store.svelte.ts` | Global state (`app`), save debouncing, project actions, target helpers, control-state sync |
 | `src/lib/types.ts` | TypeScript mirror of the Rust model, plus presets and labels |
-| `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
+| `src/lib/genres.ts` | Genre presets: detection tuning and lighting-style notes |
+| `src/lib/design.ts` | AI design plan types, applying a plan to the show, preview text |
+| `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Designer, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
 | `src/components/` | Shared UI: RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |
 | `src-tauri/src/model.rs` | The show format (serde), defaults, migrations |
 | `src-tauri/src/engine.rs` | The frame loop, routes, effects, limits, target resolution |
@@ -38,6 +40,7 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src-tauri/src/artnet.rs` | ArtDmx packets |
 | `src-tauri/src/qxf.rs` | QLC+ importer |
 | `src-tauri/src/ai.rs` | Anthropic / OpenAI-compatible client for fixture interpretation |
+| `src-tauri/src/designer.rs` | AI show designer: rig description for the prompt, and checking a returned plan against the show (id renumbering, reference fixing, clamping) |
 | `src-tauri/src/project.rs` | Project and settings files, prefs |
 | `src-tauri/src/lib.rs` | App setup, shared state, Tauri commands, the starter show |
 | `zigbee-helper/index.mjs` | Zigbee coordinator helper |
@@ -113,20 +116,26 @@ The UI calls these through `invoke` (see `generate_handler!` in `lib.rs`):
 - **Projects and settings:** `project_*`, `settings_*`, `get_band_presets`, `save_band_presets`
 - **Manual and blackout:** `set_manual`, `clear_manual`, `get_manual`, `set_blackout`
 - **Audio:** `list_audio_devices`, `restart_audio`
-- **AI:** `get_ai_settings`, `save_ai_settings`, `ai_test`, `ai_interpret`
+- **AI:** `get_ai_settings`, `save_ai_settings`, `ai_test`, `ai_interpret`, `ai_design` (takes the show and a design request, returns a checked plan and warnings; the UI applies it)
 - **Zigbee:** `zigbee_status`, `zigbee_ports`, `zigbee_permit_join`, `zigbee_identify`, `zigbee_remove`, `zigbee_reinterview`, `zigbee_reconnect`, `zigbee_profiles`
 - **Control:** `midi_status`, `control_key`, `control_fire`, `control_state`, `preset_apply`, `set_master`
 
 ## Previewing the UI in a browser
 
-During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen, and `?demo` for the demo show in `src/dev/demo.ts` with a simulated audio feed (`npm run screenshots` captures it for the README). Mocks are only loaded in development builds.
+During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen, and `?demo` for the demo show in `src/dev/demo.ts` with a simulated audio feed (`npm run screenshots` captures it for the README). `?view=design&autodesign` runs the designer against a canned plan in `src/dev/demo-design.ts`. Mocks are only loaded in development builds.
 
 ## Tests
 
 ```bash
-cd src-tauri && cargo test     # Rust: importer, Art-Net, migrations, targets, effects, Zigbee (incl. the real helper), MIDI, controls
+npm test                       # both of the below
+cd src-tauri && cargo test     # Rust: importer, Art-Net, migrations, targets, effects, Zigbee (incl. the real helper), MIDI, controls, AI designer
+npm run test:ui                # UI logic in tests/: genre presets, applying AI designs
 npm run check                  # UI type-check
 ```
+
+The UI tests use Node's built-in test runner on the TypeScript sources directly (Node 24+ strips the types; `tests/resolve-ts.mjs` resolves extensionless imports). They aren't type-checked.
+
+The AI designer tests never call a model. They check that the prompt documents every route and control action and field the data model has, so a new action fails the tests until the prompt describes it. They also check that plans are cleaned up against a rig: unknown ids, unreachable routes, out-of-range numbers, duplicate triggers, scope, and refining.
 
 The Zigbee helper test starts the real Node helper without a dongle, so it needs Node and `zigbee-helper/node_modules`; it's skipped if Node isn't found.
 

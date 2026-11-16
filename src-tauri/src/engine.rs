@@ -1076,7 +1076,7 @@ pub struct LookChans {
     macros: Vec<(String, Vec<(u8, [u8; 3])>)>,
 }
 
-fn look_chans(profiles: &HashMap<&str, &Profile>, fx: &Fixture) -> Option<LookChans> {
+pub(crate) fn look_chans(profiles: &HashMap<&str, &Profile>, fx: &Fixture) -> Option<LookChans> {
     let p = profiles.get(fx.profile_id.as_str())?;
     let mode = p.mode(&fx.mode)?;
     let mut lc = LookChans::default();

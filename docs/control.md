@@ -2,6 +2,8 @@
 
 The **Control** screen maps MIDI controllers and keyboard keys to actions, and manages presets. The top bar always has the **Master** fader and **Blackout**.
 
+To have a whole controller layout and its scene presets set up for you, name the controller on the [Design](designer.md) screen.
+
 ## MIDI
 
 Tick **Enabled**. LightDeck finds controllers automatically and reconnects if one is unplugged and plugged back in. Untick inputs you don't want to listen to (all are used by default).

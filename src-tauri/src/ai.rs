@@ -71,6 +71,16 @@ pub async fn test(settings: &AiSettings) -> Result<String, String> {
 }
 
 async fn complete(s: &AiSettings, system: &str, user: &str) -> Result<String, String> {
+    complete_with(s, system, user, false).await
+}
+
+/// For long, reasoning-heavy replies (show designs): lets Claude models think first
+/// and gives them room for a large plan.
+pub async fn complete_long(s: &AiSettings, system: &str, user: &str) -> Result<String, String> {
+    complete_with(s, system, user, true).await
+}
+
+async fn complete_with(s: &AiSettings, system: &str, user: &str, long: bool) -> Result<String, String> {
     if s.base_url.trim().is_empty() {
         return Err("Set a base URL first".into());
     }
@@ -90,12 +100,17 @@ async fn complete(s: &AiSettings, system: &str, user: &str) -> Result<String, St
         }
         _ => {
             let url = if base.ends_with("/v1/messages") { base.to_string() } else { format!("{base}/v1/messages") };
+            let claude = s.model.starts_with("claude-");
+            let max_tokens = if long && claude { s.max_tokens.max(32000) } else { s.max_tokens };
             let mut body = json!({
                 "model": s.model,
-                "max_tokens": s.max_tokens,
+                "max_tokens": max_tokens,
                 "system": system,
                 "messages": [ {"role": "user", "content": user} ]
             });
+            if long && claude {
+                body["thinking"] = json!({"type": "adaptive"});
+            }
             let mut r = client.post(url).header("anthropic-version", "2026-10-21");
             // Server-side refusal fallback; only on the first-party API (proxies may reject betas).
             if base.contains("api.anthropic.com") {
@@ -148,7 +163,7 @@ async fn complete(s: &AiSettings, system: &str, user: &str) -> Result<String, St
     }
 }
 
-fn extract_json(s: &str) -> Option<&str> {
+pub fn extract_json(s: &str) -> Option<&str> {
     let start = s.find('{')?;
     let end = s.rfind('}')?;
     (end > start).then(|| &s[start..=end])

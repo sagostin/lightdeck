@@ -1,4 +1,5 @@
 mod ai;
+mod designer;
 mod artnet;
 mod audio;
 mod control;
@@ -429,6 +430,12 @@ async fn ai_test(state: State<'_, AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn ai_design(state: State<'_, AppState>, show: Show, request: designer::DesignRequest) -> Result<designer::DesignResult, String> {
+    let s = state.ai.lock().unwrap().clone();
+    designer::design(&s, &show, &request).await
+}
+
+#[tauri::command]
 async fn ai_interpret(state: State<'_, AppState>, input: String, instruction: String) -> Result<Profile, String> {
     let s = state.ai.lock().unwrap().clone();
     ai::interpret(&s, &input, &instruction).await
@@ -638,6 +645,7 @@ pub fn run() {
             save_ai_settings,
             ai_test,
             ai_interpret,
+            ai_design,
             project_info,
             project_new,
             project_open,

@@ -5,6 +5,7 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import sample from "./sample-show.json";
 import { demoShow } from "./demo";
+import { demoDesign } from "./demo-design";
 import type { Show } from "../lib/types";
 
 export function installMocks(demo = false) {
@@ -34,7 +35,9 @@ export function installMocks(demo = false) {
       case "get_band_presets": return [];
       case "zigbee_status": return { enabled: false, mode: "usb", connected: false, bridge_online: null, error: null, state: "Off", coordinator: null, permit_join_until: 0, devices: [], sent_per_sec: 0, backlog: 0, last_send_error: null, log: [] };
       case "midi_status": return { enabled: false, available: [], connected: [], error: null };
-      case "get_ai_settings": return { schema: "anthropic", base_url: "https://api.anthropic.com", api_key: "", model: "claude-opus-5-5", auth: "x-api-key", extra_headers: {}, max_tokens: 16000 };
+      case "ai_design":
+        return demo ? new Promise((r) => setTimeout(() => r(demoDesign()), 1200)) : Promise.reject("AI isn't available in the browser preview (try ?demo)");
+      case "get_ai_settings": return { schema: "anthropic", base_url: "https://api.anthropic.com", api_key: demo ? "demo" : "", model: "claude-opus-5-5", auth: "x-api-key", extra_headers: {}, max_tokens: 16000 };
       case "zigbee_profiles": return [];
       case "plugin:event|listen": return Math.floor(Math.random() * 1e6);
       default: return null;
