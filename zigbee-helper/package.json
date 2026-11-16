@@ -1,0 +1,10 @@
+{
+  "name": "lightdeck-zigbee-helper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "zigbee-herdsman": "11.2.1"
+  }
+}

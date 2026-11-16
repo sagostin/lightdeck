@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE FixtureDefinition>
+<FixtureDefinition xmlns="http://www.qlcplus.org/FixtureDefinition">
+ <Creator>
+  <Name>Q Light Controller Plus</Name>
+  <Version>5.3.1</Version>
+  <Author>Generated from L2600-005 user manual</Author>
+ </Creator>
+ <Manufacturer>Generic</Manufacturer>
+ <Model>3D Animation RGB Laser L2600-005</Model>
+ <Type>Laser</Type>
+ <Channel Name="Mode">
+  <Group Byte="0">Maintenance</Group>
+  <Capability Min="0" Max="0" Preset="LampOff">Laser off</Capability>
+  <Capability Min="1" Max="99">DMX manual control (1-99)</Capability>
+  <Capability Min="100" Max="199">DMX sound control (100-199)</Capability>
+  <Capability Min="200" Max="219">Auto program library (200-219)</Capability>
+  <Capability Min="220" Max="249">Sound-active program library (220-249)</Capability>
+  <Capability Min="250" Max="255" Preset="LampOff">Laser off (250-255)</Capability>
+ </Channel>
+ <Channel Name="P1 Out-of-bounds / Program group">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="49">Blank parts (higher = smaller) | Auto/Sound: group 1</Capability>
+  <Capability Min="50" Max="63">Return (higher = smaller) | Auto/Sound: group 1</Capability>
+  <Capability Min="64" Max="99">Return (higher = smaller) | Auto/Sound: group 2</Capability>
+  <Capability Min="100" Max="127">Fold (higher = smaller) | Auto/Sound: group 2</Capability>
+  <Capability Min="128" Max="149">Fold (higher = smaller)</Capability>
+  <Capability Min="150" Max="199">Crossing (higher = smaller)</Capability>
+  <Capability Min="200" Max="255">Blanking (higher = bigger)</Capability>
+ </Channel>
+ <Channel Name="P1 Gallery">
+  <Group Byte="0">Gobo</Group>
+  <Capability Min="0" Max="239">Beam gallery</Capability>
+  <Capability Min="240" Max="243">Undefined (gap in manual)</Capability>
+  <Capability Min="244" Max="255">Animation gallery</Capability>
+ </Channel>
+ <Channel Name="P1 Pattern">
+  <Group Byte="0">Gobo</Group>
+  <Capability Min="0" Max="0">Pattern 0 (auto/sound: play dynamic pictures in sequence)</Capability>
+  <Capability Min="1" Max="255">Pattern select (auto/sound: every 2 values = one dynamic picture)</Capability>
+ </Channel>
+ <Channel Name="P1 Zoom">
+  <Group Byte="0">Beam</Group>
+  <Capability Min="0" Max="127">Static size</Capability>
+  <Capability Min="128" Max="159">Dynamic zoom in</Capability>
+  <Capability Min="160" Max="191">Dynamic zoom out</Capability>
+  <Capability Min="192" Max="255">Dynamic flip zoom (faster with higher value)</Capability>
+ </Channel>
+ <Channel Name="P1 Rotation">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="127">Static rotation angle</Capability>
+  <Capability Min="128" Max="192">Dynamic rotation 1</Capability>
+  <Capability Min="193" Max="255">Dynamic rotation 2</Capability>
+ </Channel>
+ <Channel Name="P1 Position X">
+  <Group Byte="0">Pan</Group>
+  <Capability Min="0" Max="127">Static position</Capability>
+  <Capability Min="128" Max="159">Dynamic push-up wave</Capability>
+  <Capability Min="160" Max="191">Dynamic push-down wave</Capability>
+  <Capability Min="192" Max="223">Dynamic left shift</Capability>
+  <Capability Min="224" Max="255">Dynamic right shift</Capability>
+ </Channel>
+ <Channel Name="P1 Position Y">
+  <Group Byte="0">Tilt</Group>
+  <Capability Min="0" Max="127">Static position</Capability>
+  <Capability Min="128" Max="159">Dynamic right-push wave</Capability>
+  <Capability Min="160" Max="191">Dynamic left-push wave</Capability>
+  <Capability Min="192" Max="223">Dynamic move up</Capability>
+  <Capability Min="224" Max="255">Dynamic move down</Capability>
+ </Channel>
+ <Channel Name="P1 Size X">
+  <Group Byte="0">Beam</Group>
+  <Capability Min="0" Max="127">Static width</Capability>
+  <Capability Min="128" Max="159">Dynamic push-up distortion</Capability>
+  <Capability Min="160" Max="191">Dynamic push-down distortion</Capability>
+  <Capability Min="192" Max="223">Dynamic zooming</Capability>
+  <Capability Min="224" Max="255">Dynamic flip zooming</Capability>
+ </Channel>
+ <Channel Name="P1 Size Y">
+  <Group Byte="0">Beam</Group>
+  <Capability Min="0" Max="127">Static height</Capability>
+  <Capability Min="128" Max="159">Dynamic right-push distortion</Capability>
+  <Capability Min="160" Max="191">Dynamic left-push distortion</Capability>
+  <Capability Min="192" Max="223">Dynamic zooming</Capability>
+  <Capability Min="224" Max="255">Dynamic flip zooming</Capability>
+ </Channel>
+ <Channel Name="P1 Colour Mode">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="0">Single colour (uses Colour channel)</Capability>
+  <Capability Min="1" Max="255">Change colour every N points</Capability>
+ </Channel>
+ <Channel Name="P1 Colour">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="7">Original colours</Capability>
+  <Capability Min="8" Max="15" Preset="ColorMacro" Res1="#ffffff">White</Capability>
+  <Capability Min="16" Max="23" Preset="ColorMacro" Res1="#ff0000">Red</Capability>
+  <Capability Min="24" Max="31" Preset="ColorMacro" Res1="#ffff00">Yellow</Capability>
+  <Capability Min="32" Max="39" Preset="ColorMacro" Res1="#00ff00">Green</Capability>
+  <Capability Min="40" Max="47" Preset="ColorMacro" Res1="#00ffff">Indigo / Cyan</Capability>
+  <Capability Min="48" Max="55" Preset="ColorMacro" Res1="#0000ff">Blue</Capability>
+  <Capability Min="56" Max="63" Preset="ColorMacro" Res1="#ff00ff">Purple</Capability>
+  <Capability Min="64" Max="95">Full picture R/G/B change</Capability>
+  <Capability Min="96" Max="127">Full picture Y/C/P change</Capability>
+  <Capability Min="128" Max="159">Full picture colourful change</Capability>
+  <Capability Min="160" Max="191">Colourful colour change</Capability>
+  <Capability Min="192" Max="223">Forward colour chase</Capability>
+  <Capability Min="224" Max="255">Reverse colour chase</Capability>
+ </Channel>
+ <Channel Name="P1 Node Highlight">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="63">Nodes getting brighter</Capability>
+  <Capability Min="64" Max="127">Broken lines</Capability>
+  <Capability Min="128" Max="159">Scanning line</Capability>
+  <Capability Min="160" Max="223">Undefined (not in manual)</Capability>
+  <Capability Min="224" Max="255">Reserved</Capability>
+ </Channel>
+ <Channel Name="P1 Node Expansion">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Expand points (Drawing 0-127) / delay after full expansion (Drawing 128-255)</Capability>
+ </Channel>
+ <Channel Name="P1 Drawing">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="63">Forward manual drawing (amount = Node Expansion)</Capability>
+  <Capability Min="64" Max="127">Reverse manual drawing (amount = Node Expansion)</Capability>
+  <Capability Min="128" Max="159">Auto drawing effect A</Capability>
+  <Capability Min="160" Max="191">Auto drawing effect B</Capability>
+  <Capability Min="192" Max="223">Auto drawing effect C</Capability>
+  <Capability Min="224" Max="255">Auto drawing effect D</Capability>
+ </Channel>
+ <Channel Name="P1 Distortion">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Distortion amount</Capability>
+ </Channel>
+ <Channel Name="P2 Distortion">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Distortion amount</Capability>
+ </Channel>
+ <Channel Name="P2 On/Off">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="0">Pattern 2 off</Capability>
+  <Capability Min="1" Max="255">Pattern 2 on</Capability>
+ </Channel>
+ <Channel Name="P2 Out-of-bounds / Size">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="49">Out-of-bounds: blank parts (higher = smaller)</Capability>
+  <Capability Min="50" Max="99">Out-of-bounds: return (higher = smaller)</Capability>
+  <Capability Min="100" Max="149">Out-of-bounds: fold (higher = smaller)</Capability>
+  <Capability Min="150" Max="199">Out-of-bounds: crossing (higher = smaller)</Capability>
+  <Capability Min="200" Max="255">Out-of-bounds: blanking (higher = bigger)</Capability>
+ </Channel>
+ <Channel Name="P2 Library (unused)">
+  <Group Byte="0">Nothing</Group>
+  <Capability Min="0" Max="255">No function (pattern 2 always uses beam library)</Capability>
+ </Channel>
+ <Channel Name="P2 Pattern">
+  <Group Byte="0">Gobo</Group>
+  <Capability Min="0" Max="0">Pattern 0 (auto/sound: play dynamic pictures in sequence)</Capability>
+  <Capability Min="1" Max="255">Pattern select (auto/sound: every 2 values = one dynamic picture)</Capability>
+ </Channel>
+ <Channel Name="P2 Zoom">
+  <Group Byte="0">Beam</Group>
+  <Capability Min="0" Max="127">Static size</Capability>
+  <Capability Min="128" Max="159">Dynamic zoom in</Capability>
+  <Capability Min="160" Max="191">Dynamic zoom out</Capability>
+  <Capability Min="192" Max="255">Dynamic flip zoom (faster with higher value)</Capability>
+ </Channel>
+ <Channel Name="P2 Rotation">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="127">Static rotation angle</Capability>
+  <Capability Min="128" Max="192">Dynamic rotation 1</Capability>
+  <Capability Min="193" Max="255">Dynamic rotation 2</Capability>
+ </Channel>
+ <Channel Name="P2 Position X">
+  <Group Byte="0">Pan</Group>
+  <Capability Min="0" Max="127">Static position</Capability>
+  <Capability Min="128" Max="159">Dynamic push-up wave</Capability>
+  <Capability Min="160" Max="191">Dynamic push-down wave</Capability>
+  <Capability Min="192" Max="223">Dynamic left shift</Capability>
+  <Capability Min="224" Max="255">Dynamic right shift</Capability>
+ </Channel>
+ <Channel Name="P2 Position Y">
+  <Group Byte="0">Tilt</Group>
+  <Capability Min="0" Max="127">Static position</Capability>
+  <Capability Min="128" Max="159">Dynamic right-push wave</Capability>
+  <Capability Min="160" Max="191">Dynamic left-push wave</Capability>
+  <Capability Min="192" Max="224">Dynamic move up</Capability>
+  <Capability Min="225" Max="255">Dynamic move down</Capability>
+ </Channel>
+ <Channel Name="P2 Flip X">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="127">Static flip</Capability>
+  <Capability Min="128" Max="159">Dynamic push-up distortion</Capability>
+  <Capability Min="160" Max="191">Dynamic push-down distortion</Capability>
+  <Capability Min="192" Max="223">Dynamic flip</Capability>
+  <Capability Min="224" Max="255">Dynamic flip zooming</Capability>
+ </Channel>
+ <Channel Name="P2 Flip Y">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="127">Static flip</Capability>
+  <Capability Min="128" Max="159">Dynamic right-push distortion</Capability>
+  <Capability Min="160" Max="191">Dynamic left-push distortion</Capability>
+  <Capability Min="192" Max="223">Dynamic flip</Capability>
+  <Capability Min="224" Max="255">Dynamic flip zooming</Capability>
+ </Channel>
+ <Channel Name="P2 Colour Mode">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="0">Single colour (uses Colour channel)</Capability>
+  <Capability Min="1" Max="255">Change colour every N points</Capability>
+ </Channel>
+ <Channel Name="P2 Colour">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="7">Original colours</Capability>
+  <Capability Min="8" Max="15" Preset="ColorMacro" Res1="#ffffff">White</Capability>
+  <Capability Min="16" Max="23" Preset="ColorMacro" Res1="#ff0000">Red</Capability>
+  <Capability Min="24" Max="31" Preset="ColorMacro" Res1="#ffff00">Yellow</Capability>
+  <Capability Min="32" Max="39" Preset="ColorMacro" Res1="#00ff00">Green</Capability>
+  <Capability Min="40" Max="47" Preset="ColorMacro" Res1="#00ffff">Indigo / Cyan</Capability>
+  <Capability Min="48" Max="55" Preset="ColorMacro" Res1="#0000ff">Blue</Capability>
+  <Capability Min="56" Max="63" Preset="ColorMacro" Res1="#ff00ff">Purple</Capability>
+  <Capability Min="64" Max="95">Full picture R/G/B change</Capability>
+  <Capability Min="96" Max="127">Full picture Y/C/P change</Capability>
+  <Capability Min="128" Max="159">Full picture colourful change</Capability>
+  <Capability Min="160" Max="191">Colourful colour change</Capability>
+  <Capability Min="192" Max="223">Forward colour chase</Capability>
+  <Capability Min="224" Max="255">Reverse colour chase</Capability>
+ </Channel>
+ <Channel Name="P2 Node Highlight">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="63">Nodes getting brighter</Capability>
+  <Capability Min="64" Max="127">Broken lines</Capability>
+  <Capability Min="128" Max="160">Scanning line / array P1 along P2</Capability>
+  <Capability Min="161" Max="255">Array, colour from P2 Colour channels</Capability>
+ </Channel>
+ <Channel Name="P2 Node Expansion">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Expand points (Drawing 0-127) / delay after full expansion (Drawing 128-255)</Capability>
+ </Channel>
+ <Channel Name="P2 Drawing">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="63">Forward manual drawing (amount = Node Expansion)</Capability>
+  <Capability Min="64" Max="127">Reverse manual drawing (amount = Node Expansion)</Capability>
+  <Capability Min="128" Max="159">Auto drawing effect A</Capability>
+  <Capability Min="160" Max="191">Auto drawing effect B</Capability>
+  <Capability Min="192" Max="223">Auto drawing effect C</Capability>
+  <Capability Min="224" Max="255">Auto drawing effect D</Capability>
+ </Channel>
+ <Mode Name="Professional DMX 32CH">
+  <Channel Number="0">Mode</Channel>
+  <Channel Number="1">P1 Out-of-bounds / Program group</Channel>
+  <Channel Number="2">P1 Gallery</Channel>
+  <Channel Number="3">P1 Pattern</Channel>
+  <Channel Number="4">P1 Zoom</Channel>
+  <Channel Number="5">P1 Rotation</Channel>
+  <Channel Number="6">P1 Position X</Channel>
+  <Channel Number="7">P1 Position Y</Channel>
+  <Channel Number="8">P1 Size X</Channel>
+  <Channel Number="9">P1 Size Y</Channel>
+  <Channel Number="10">P1 Colour Mode</Channel>
+  <Channel Number="11">P1 Colour</Channel>
+  <Channel Number="12">P1 Node Highlight</Channel>
+  <Channel Number="13">P1 Node Expansion</Channel>
+  <Channel Number="14">P1 Drawing</Channel>
+  <Channel Number="15">P1 Distortion</Channel>
+  <Channel Number="16">P2 Distortion</Channel>
+  <Channel Number="17">P2 On/Off</Channel>
+  <Channel Number="18">P2 Out-of-bounds / Size</Channel>
+  <Channel Number="19">P2 Library (unused)</Channel>
+  <Channel Number="20">P2 Pattern</Channel>
+  <Channel Number="21">P2 Zoom</Channel>
+  <Channel Number="22">P2 Rotation</Channel>
+  <Channel Number="23">P2 Position X</Channel>
+  <Channel Number="24">P2 Position Y</Channel>
+  <Channel Number="25">P2 Flip X</Channel>
+  <Channel Number="26">P2 Flip Y</Channel>
+  <Channel Number="27">P2 Colour Mode</Channel>
+  <Channel Number="28">P2 Colour</Channel>
+  <Channel Number="29">P2 Node Highlight</Channel>
+  <Channel Number="30">P2 Node Expansion</Channel>
+  <Channel Number="31">P2 Drawing</Channel>
+  <Head>
+   <Channel>0</Channel>
+   <Channel>1</Channel>
+   <Channel>2</Channel>
+   <Channel>3</Channel>
+   <Channel>4</Channel>
+   <Channel>5</Channel>
+   <Channel>6</Channel>
+   <Channel>7</Channel>
+   <Channel>8</Channel>
+   <Channel>9</Channel>
+   <Channel>10</Channel>
+   <Channel>11</Channel>
+   <Channel>12</Channel>
+   <Channel>13</Channel>
+   <Channel>14</Channel>
+   <Channel>15</Channel>
+  </Head>
+  <Head>
+   <Channel>16</Channel>
+   <Channel>17</Channel>
+   <Channel>18</Channel>
+   <Channel>19</Channel>
+   <Channel>20</Channel>
+   <Channel>21</Channel>
+   <Channel>22</Channel>
+   <Channel>23</Channel>
+   <Channel>24</Channel>
+   <Channel>25</Channel>
+   <Channel>26</Channel>
+   <Channel>27</Channel>
+   <Channel>28</Channel>
+   <Channel>29</Channel>
+   <Channel>30</Channel>
+   <Channel>31</Channel>
+  </Head>
+ </Mode>
+ <Physical>
+  <Bulb Type="Laser" Lumens="0" ColourTemperature="0"/>
+  <Dimensions Weight="0" Width="0" Height="0" Depth="0"/>
+  <Lens Name="Other" DegreesMin="0" DegreesMax="0"/>
+  <Focus Type="Fixed" PanMax="0" TiltMax="0"/>
+  <Technical PowerConsumption="13" DmxConnector="3-pin"/>
+ </Physical>
+</FixtureDefinition>

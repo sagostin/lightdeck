@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE FixtureDefinition>
+<FixtureDefinition xmlns="http://www.qlcplus.org/FixtureDefinition">
+ <Creator>
+  <Name>dmxbridge</Name>
+  <Version>1</Version>
+  <Author>dbctl qxf</Author>
+ </Creator>
+ <Manufacturer>dmxbridge</Manufacturer>
+ <Model>fog-01</Model>
+ <Type>Smoke</Type>
+ <Channel Name="Fog">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="127">Off</Capability>
+  <Capability Min="128" Max="255">On</Capability>
+ </Channel>
+ <Channel Name="Color">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="0">No change</Capability>
+  <Capability Min="1" Max="17" Preset="ColorMacro" Res1="#000000">Off</Capability>
+  <Capability Min="18" Max="34" Preset="ColorMacro" Res1="#ff0000">Red</Capability>
+  <Capability Min="35" Max="51" Preset="ColorMacro" Res1="#ff2a55">Reddish pink</Capability>
+  <Capability Min="52" Max="68" Preset="ColorMacro" Res1="#d6006e">Dark pink</Capability>
+  <Capability Min="69" Max="85" Preset="ColorMacro" Res1="#ff5fae">Pink</Capability>
+  <Capability Min="86" Max="102" Preset="ColorMacro" Res1="#e0a0ff">Light pink</Capability>
+  <Capability Min="103" Max="119" Preset="ColorMacro" Res1="#9a2aff">Purple</Capability>
+  <Capability Min="120" Max="136" Preset="ColorMacro" Res1="#7a1fd6">Purple 2</Capability>
+  <Capability Min="137" Max="153" Preset="ColorMacro" Res1="#1a2aff">Dark blue</Capability>
+  <Capability Min="154" Max="170" Preset="ColorMacro" Res1="#0000ff">Blue</Capability>
+  <Capability Min="171" Max="187" Preset="ColorMacro" Res1="#4fa8ff">Light blue</Capability>
+  <Capability Min="188" Max="204" Preset="ColorMacro" Res1="#00ffff">Cyan</Capability>
+  <Capability Min="205" Max="221" Preset="ColorMacro" Res1="#00ff00">Green</Capability>
+  <Capability Min="222" Max="238" Preset="ColorMacro" Res1="#40ff60">Green 2</Capability>
+  <Capability Min="239" Max="255" Preset="ColorMacro" Res1="#ffff00">Yellow</Capability>
+ </Channel>
+ <Channel Name="Mode">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="0">No change</Capability>
+  <Capability Min="1" Max="64">Jump</Capability>
+  <Capability Min="65" Max="128">Gradual</Capability>
+  <Capability Min="129" Max="192">Pulse</Capability>
+  <Capability Min="193" Max="255">Strobe</Capability>
+ </Channel>
+ <Channel Name="Brightness">
+  <Group Byte="0">Intensity</Group>
+  <Capability Min="0" Max="25">Level 0/5</Capability>
+  <Capability Min="26" Max="76">Level 1/5</Capability>
+  <Capability Min="77" Max="127">Level 2/5</Capability>
+  <Capability Min="128" Max="178">Level 3/5</Capability>
+  <Capability Min="179" Max="229">Level 4/5</Capability>
+  <Capability Min="230" Max="255">Level 5/5</Capability>
+ </Channel>
+ <Mode Name="4 Channel">
+  <Channel Number="0">Fog</Channel>
+  <Channel Number="1">Color</Channel>
+  <Channel Number="2">Mode</Channel>
+  <Channel Number="3">Brightness</Channel>
+ </Mode>
+</FixtureDefinition>

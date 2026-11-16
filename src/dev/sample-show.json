@@ -1,0 +1,2326 @@
+{
+ "version": 3,
+ "profiles": [
+  {
+   "id": "generic-3d_animation_rgb_laser_l2600_005",
+   "manufacturer": "Generic",
+   "model": "3D Animation RGB Laser L2600-005",
+   "kind": "laser",
+   "channels": [
+    {
+     "key": "mode",
+     "name": "Mode",
+     "group": "mode",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Laser off",
+       "color": null,
+       "tags": [
+        "off"
+       ]
+      },
+      {
+       "min": 1,
+       "max": 99,
+       "label": "DMX manual control (1-99)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 100,
+       "max": 199,
+       "label": "DMX sound control (100-199)",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      },
+      {
+       "min": 200,
+       "max": 219,
+       "label": "Auto program library (200-219)",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      },
+      {
+       "min": 220,
+       "max": 249,
+       "label": "Sound-active program library (220-249)",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      },
+      {
+       "min": 250,
+       "max": 255,
+       "label": "Laser off (250-255)",
+       "color": null,
+       "tags": [
+        "off"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_out_of_bounds_program_group",
+     "name": "P1 Out-of-bounds / Program group",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 49,
+       "label": "Blank parts (higher = smaller) | Auto/Sound: group 1",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 50,
+       "max": 63,
+       "label": "Return (higher = smaller) | Auto/Sound: group 1",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 99,
+       "label": "Return (higher = smaller) | Auto/Sound: group 2",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 100,
+       "max": 127,
+       "label": "Fold (higher = smaller) | Auto/Sound: group 2",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 149,
+       "label": "Fold (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 150,
+       "max": 199,
+       "label": "Crossing (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 200,
+       "max": 255,
+       "label": "Blanking (higher = bigger)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_gallery",
+     "name": "P1 Gallery",
+     "group": "pattern",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 239,
+       "label": "Beam gallery",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 240,
+       "max": 243,
+       "label": "Undefined (gap in manual)",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      },
+      {
+       "min": 244,
+       "max": 255,
+       "label": "Animation gallery",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_pattern",
+     "name": "P1 Pattern",
+     "group": "pattern",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Pattern 0 (auto/sound: play dynamic pictures in sequence)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 255,
+       "label": "Pattern select (auto/sound: every 2 values = one dynamic picture)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": [
+      {
+       "value": 21,
+       "label": "Line",
+       "tags": [
+        "chill"
+       ],
+       "rating": 4
+      },
+      {
+       "value": 0,
+       "label": "Square",
+       "tags": [
+        "large_projection"
+       ],
+       "rating": 3
+      },
+      {
+       "value": 48,
+       "label": "Double Line",
+       "tags": [],
+       "rating": 0
+      }
+     ]
+    },
+    {
+     "key": "p1_zoom",
+     "name": "P1 Zoom",
+     "group": "beam",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static size",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic zoom in",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic zoom out",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 255,
+       "label": "Dynamic flip zoom (faster with higher value)",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_rotation",
+     "name": "P1 Rotation",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static rotation angle",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 192,
+       "label": "Dynamic rotation 1",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 193,
+       "max": 255,
+       "label": "Dynamic rotation 2",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_position_x",
+     "name": "P1 Position X",
+     "group": "pan",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static position",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic push-up wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic push-down wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic left shift",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic right shift",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_position_y",
+     "name": "P1 Position Y",
+     "group": "tilt",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static position",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic right-push wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic left-push wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic move up",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic move down",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_size_x",
+     "name": "P1 Size X",
+     "group": "beam",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static width",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic push-up distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic push-down distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic flip zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_size_y",
+     "name": "P1 Size Y",
+     "group": "beam",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static height",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic right-push distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic left-push distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic flip zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_colour_mode",
+     "name": "P1 Colour Mode",
+     "group": "color",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Single colour (uses Colour channel)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 255,
+       "label": "Change colour every N points",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_colour",
+     "name": "P1 Colour",
+     "group": "color",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 7,
+       "label": "Original colours",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 8,
+       "max": 15,
+       "label": "White",
+       "color": "#ffffff",
+       "tags": []
+      },
+      {
+       "min": 16,
+       "max": 23,
+       "label": "Red",
+       "color": "#ff0000",
+       "tags": []
+      },
+      {
+       "min": 24,
+       "max": 31,
+       "label": "Yellow",
+       "color": "#ffff00",
+       "tags": []
+      },
+      {
+       "min": 32,
+       "max": 39,
+       "label": "Green",
+       "color": "#00ff00",
+       "tags": []
+      },
+      {
+       "min": 40,
+       "max": 47,
+       "label": "Indigo / Cyan",
+       "color": "#00ffff",
+       "tags": []
+      },
+      {
+       "min": 48,
+       "max": 55,
+       "label": "Blue",
+       "color": "#0000ff",
+       "tags": []
+      },
+      {
+       "min": 56,
+       "max": 63,
+       "label": "Purple",
+       "color": "#ff00ff",
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 95,
+       "label": "Full picture R/G/B change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 96,
+       "max": 127,
+       "label": "Full picture Y/C/P change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Full picture colourful change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Colourful colour change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Forward colour chase",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Reverse colour chase",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_node_highlight",
+     "name": "P1 Node Highlight",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 63,
+       "label": "Nodes getting brighter",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 127,
+       "label": "Broken lines",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Scanning line",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 160,
+       "max": 223,
+       "label": "Undefined (not in manual)",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Reserved",
+       "color": null,
+       "tags": [
+        "blocked"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_node_expansion",
+     "name": "P1 Node Expansion",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 255,
+       "label": "Expand points (Drawing 0-127) / delay after full expansion (Drawing 128-255)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_drawing",
+     "name": "P1 Drawing",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 63,
+       "label": "Forward manual drawing (amount = Node Expansion)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 127,
+       "label": "Reverse manual drawing (amount = Node Expansion)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Auto drawing effect A",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Auto drawing effect B",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Auto drawing effect C",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Auto drawing effect D",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p1_distortion",
+     "name": "P1 Distortion",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 255,
+       "label": "Distortion amount",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_distortion",
+     "name": "P2 Distortion",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 255,
+       "label": "Distortion amount",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_on_off",
+     "name": "P2 On/Off",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Pattern 2 off",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 255,
+       "label": "Pattern 2 on",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_out_of_bounds_size",
+     "name": "P2 Out-of-bounds / Size",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 49,
+       "label": "Out-of-bounds: blank parts (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 50,
+       "max": 99,
+       "label": "Out-of-bounds: return (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 100,
+       "max": 149,
+       "label": "Out-of-bounds: fold (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 150,
+       "max": 199,
+       "label": "Out-of-bounds: crossing (higher = smaller)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 200,
+       "max": 255,
+       "label": "Out-of-bounds: blanking (higher = bigger)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_library_unused",
+     "name": "P2 Library (unused)",
+     "group": "other",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 255,
+       "label": "No function (pattern 2 always uses beam library)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_pattern",
+     "name": "P2 Pattern",
+     "group": "pattern",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Pattern 0 (auto/sound: play dynamic pictures in sequence)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 255,
+       "label": "Pattern select (auto/sound: every 2 values = one dynamic picture)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_zoom",
+     "name": "P2 Zoom",
+     "group": "beam",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static size",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic zoom in",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic zoom out",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 255,
+       "label": "Dynamic flip zoom (faster with higher value)",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_rotation",
+     "name": "P2 Rotation",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static rotation angle",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 192,
+       "label": "Dynamic rotation 1",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 193,
+       "max": 255,
+       "label": "Dynamic rotation 2",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_position_x",
+     "name": "P2 Position X",
+     "group": "pan",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static position",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic push-up wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic push-down wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic left shift",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic right shift",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_position_y",
+     "name": "P2 Position Y",
+     "group": "tilt",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static position",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic right-push wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic left-push wave",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 224,
+       "label": "Dynamic move up",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 225,
+       "max": 255,
+       "label": "Dynamic move down",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_flip_x",
+     "name": "P2 Flip X",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static flip",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic push-up distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic push-down distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic flip",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic flip zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_flip_y",
+     "name": "P2 Flip Y",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Static flip",
+       "color": null,
+       "tags": [
+        "static"
+       ]
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Dynamic right-push distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Dynamic left-push distortion",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Dynamic flip",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Dynamic flip zooming",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_colour_mode",
+     "name": "P2 Colour Mode",
+     "group": "color",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "Single colour (uses Colour channel)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 255,
+       "label": "Change colour every N points",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_colour",
+     "name": "P2 Colour",
+     "group": "color",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 7,
+       "label": "Original colours",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 8,
+       "max": 15,
+       "label": "White",
+       "color": "#ffffff",
+       "tags": []
+      },
+      {
+       "min": 16,
+       "max": 23,
+       "label": "Red",
+       "color": "#ff0000",
+       "tags": []
+      },
+      {
+       "min": 24,
+       "max": 31,
+       "label": "Yellow",
+       "color": "#ffff00",
+       "tags": []
+      },
+      {
+       "min": 32,
+       "max": 39,
+       "label": "Green",
+       "color": "#00ff00",
+       "tags": []
+      },
+      {
+       "min": 40,
+       "max": 47,
+       "label": "Indigo / Cyan",
+       "color": "#00ffff",
+       "tags": []
+      },
+      {
+       "min": 48,
+       "max": 55,
+       "label": "Blue",
+       "color": "#0000ff",
+       "tags": []
+      },
+      {
+       "min": 56,
+       "max": 63,
+       "label": "Purple",
+       "color": "#ff00ff",
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 95,
+       "label": "Full picture R/G/B change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 96,
+       "max": 127,
+       "label": "Full picture Y/C/P change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Full picture colourful change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Colourful colour change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Forward colour chase",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Reverse colour chase",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_node_highlight",
+     "name": "P2 Node Highlight",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 63,
+       "label": "Nodes getting brighter",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 127,
+       "label": "Broken lines",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 160,
+       "label": "Scanning line / array P1 along P2",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 161,
+       "max": 255,
+       "label": "Array, colour from P2 Colour channels",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_node_expansion",
+     "name": "P2 Node Expansion",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 255,
+       "label": "Expand points (Drawing 0-127) / delay after full expansion (Drawing 128-255)",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "p2_drawing",
+     "name": "P2 Drawing",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 63,
+       "label": "Forward manual drawing (amount = Node Expansion)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 64,
+       "max": 127,
+       "label": "Reverse manual drawing (amount = Node Expansion)",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 159,
+       "label": "Auto drawing effect A",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 160,
+       "max": 191,
+       "label": "Auto drawing effect B",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 192,
+       "max": 223,
+       "label": "Auto drawing effect C",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      },
+      {
+       "min": 224,
+       "max": 255,
+       "label": "Auto drawing effect D",
+       "color": null,
+       "tags": [
+        "dynamic"
+       ]
+      }
+     ],
+     "values": []
+    }
+   ],
+   "modes": [
+    {
+     "name": "Professional DMX 32CH",
+     "channels": [
+      "mode",
+      "p1_out_of_bounds_program_group",
+      "p1_gallery",
+      "p1_pattern",
+      "p1_zoom",
+      "p1_rotation",
+      "p1_position_x",
+      "p1_position_y",
+      "p1_size_x",
+      "p1_size_y",
+      "p1_colour_mode",
+      "p1_colour",
+      "p1_node_highlight",
+      "p1_node_expansion",
+      "p1_drawing",
+      "p1_distortion",
+      "p2_distortion",
+      "p2_on_off",
+      "p2_out_of_bounds_size",
+      "p2_library_unused",
+      "p2_pattern",
+      "p2_zoom",
+      "p2_rotation",
+      "p2_position_x",
+      "p2_position_y",
+      "p2_flip_x",
+      "p2_flip_y",
+      "p2_colour_mode",
+      "p2_colour",
+      "p2_node_highlight",
+      "p2_node_expansion",
+      "p2_drawing"
+     ],
+     "heads": [
+      {
+       "name": "P1",
+       "channels": [
+        "mode",
+        "p1_out_of_bounds_program_group",
+        "p1_gallery",
+        "p1_pattern",
+        "p1_zoom",
+        "p1_rotation",
+        "p1_position_x",
+        "p1_position_y",
+        "p1_size_x",
+        "p1_size_y",
+        "p1_colour_mode",
+        "p1_colour",
+        "p1_node_highlight",
+        "p1_node_expansion",
+        "p1_drawing",
+        "p1_distortion"
+       ]
+      },
+      {
+       "name": "P2",
+       "channels": [
+        "p2_distortion",
+        "p2_on_off",
+        "p2_out_of_bounds_size",
+        "p2_library_unused",
+        "p2_pattern",
+        "p2_zoom",
+        "p2_rotation",
+        "p2_position_x",
+        "p2_position_y",
+        "p2_flip_x",
+        "p2_flip_y",
+        "p2_colour_mode",
+        "p2_colour",
+        "p2_node_highlight",
+        "p2_node_expansion",
+        "p2_drawing"
+       ]
+      }
+     ]
+    }
+   ],
+   "notes": "Imported from QLC+ (Laser)",
+   "looks": [
+    {
+     "id": "look-6o11ks8",
+     "name": "Rainbow Sweep Up/Down",
+     "head": "P1",
+     "values": {
+      "p1_colour_mode": 154,
+      "p1_pattern": 21,
+      "p1_position_y": 89
+     },
+     "tags": [
+      "chill"
+     ],
+     "rating": 4,
+     "sets": [],
+     "builtin": false,
+     "motions": {
+      "p1_position_y": {
+       "kind": "sweep",
+       "ranges": [
+        [
+         64,
+         127
+        ]
+       ],
+       "values": [],
+       "clock": "beat",
+       "period": 4.0,
+       "shape": "pingpong",
+       "step": 1,
+       "seed": 794816,
+       "source": "level",
+       "tags": []
+      }
+     }
+    },
+    {
+     "id": "look-s2vtfcx",
+     "name": "Double Line Up Down",
+     "head": "P1",
+     "values": {
+      "p1_colour_mode": 154,
+      "p1_pattern": 48,
+      "p1_position_y": 98
+     },
+     "tags": [],
+     "rating": 4,
+     "sets": [],
+     "builtin": false,
+     "motions": {
+      "p1_position_y": {
+       "kind": "sweep",
+       "ranges": [
+        [
+         75,
+         127
+        ]
+       ],
+       "values": [],
+       "clock": "beat",
+       "period": 4.0,
+       "shape": "pingpong",
+       "step": 1,
+       "seed": 794816,
+       "source": "level",
+       "tags": []
+      }
+     }
+    },
+    {
+     "id": "look-hamjzdt",
+     "name": "Pattern select (auto/sound: every 2 values = one dynamic picture) 48",
+     "head": "P1",
+     "values": {
+      "p1_colour_mode": 154,
+      "p1_pattern": 48,
+      "p1_position_y": 80
+     },
+     "tags": [],
+     "rating": 4,
+     "sets": [
+      "set-basic"
+     ],
+     "builtin": false,
+     "motions": {
+      "p1_position_y": {
+       "kind": "sweep",
+       "ranges": [
+        [
+         75,
+         127
+        ]
+       ],
+       "values": [],
+       "clock": "beat",
+       "period": 4.0,
+       "shape": "pingpong",
+       "step": 1,
+       "seed": 794816,
+       "source": "level",
+       "tags": []
+      }
+     }
+    }
+   ],
+   "look_sets": [
+    {
+     "id": "set-basic",
+     "name": "Basic",
+     "color": "#7c5cff"
+    }
+   ]
+  },
+  {
+   "id": "dmxbridge-fog_01",
+   "manufacturer": "dmxbridge",
+   "model": "fog-01",
+   "kind": "fog",
+   "channels": [
+    {
+     "key": "fog",
+     "name": "Fog",
+     "group": "fog",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 127,
+       "label": "Off",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 255,
+       "label": "On",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "color",
+     "name": "Color",
+     "group": "color",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "No change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 17,
+       "label": "Off",
+       "color": "#000000",
+       "tags": []
+      },
+      {
+       "min": 18,
+       "max": 34,
+       "label": "Red",
+       "color": "#ff0000",
+       "tags": []
+      },
+      {
+       "min": 35,
+       "max": 51,
+       "label": "Reddish pink",
+       "color": "#ff2a55",
+       "tags": []
+      },
+      {
+       "min": 52,
+       "max": 68,
+       "label": "Dark pink",
+       "color": "#d6006e",
+       "tags": []
+      },
+      {
+       "min": 69,
+       "max": 85,
+       "label": "Pink",
+       "color": "#ff5fae",
+       "tags": []
+      },
+      {
+       "min": 86,
+       "max": 102,
+       "label": "Light pink",
+       "color": "#e0a0ff",
+       "tags": []
+      },
+      {
+       "min": 103,
+       "max": 119,
+       "label": "Purple",
+       "color": "#9a2aff",
+       "tags": []
+      },
+      {
+       "min": 120,
+       "max": 136,
+       "label": "Purple 2",
+       "color": "#7a1fd6",
+       "tags": []
+      },
+      {
+       "min": 137,
+       "max": 153,
+       "label": "Dark blue",
+       "color": "#1a2aff",
+       "tags": []
+      },
+      {
+       "min": 154,
+       "max": 170,
+       "label": "Blue",
+       "color": "#0000ff",
+       "tags": []
+      },
+      {
+       "min": 171,
+       "max": 187,
+       "label": "Light blue",
+       "color": "#4fa8ff",
+       "tags": []
+      },
+      {
+       "min": 188,
+       "max": 204,
+       "label": "Cyan",
+       "color": "#00ffff",
+       "tags": []
+      },
+      {
+       "min": 205,
+       "max": 221,
+       "label": "Green",
+       "color": "#00ff00",
+       "tags": []
+      },
+      {
+       "min": 222,
+       "max": 238,
+       "label": "Green 2",
+       "color": "#40ff60",
+       "tags": []
+      },
+      {
+       "min": 239,
+       "max": 255,
+       "label": "Yellow",
+       "color": "#ffff00",
+       "tags": []
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "mode",
+     "name": "Mode",
+     "group": "effect",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 0,
+       "label": "No change",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 1,
+       "max": 64,
+       "label": "Jump",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 65,
+       "max": 128,
+       "label": "Gradual",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 129,
+       "max": 192,
+       "label": "Pulse",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 193,
+       "max": 255,
+       "label": "Strobe",
+       "color": null,
+       "tags": [
+        "strobe"
+       ]
+      }
+     ],
+     "values": []
+    },
+    {
+     "key": "brightness",
+     "name": "Brightness",
+     "group": "intensity",
+     "default": 0,
+     "capabilities": [
+      {
+       "min": 0,
+       "max": 25,
+       "label": "Level 0/5",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 26,
+       "max": 76,
+       "label": "Level 1/5",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 77,
+       "max": 127,
+       "label": "Level 2/5",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 128,
+       "max": 178,
+       "label": "Level 3/5",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 179,
+       "max": 229,
+       "label": "Level 4/5",
+       "color": null,
+       "tags": []
+      },
+      {
+       "min": 230,
+       "max": 255,
+       "label": "Level 5/5",
+       "color": null,
+       "tags": []
+      }
+     ],
+     "values": []
+    }
+   ],
+   "modes": [
+    {
+     "name": "4 Channel",
+     "channels": [
+      "fog",
+      "color",
+      "mode",
+      "brightness"
+     ],
+     "heads": []
+    }
+   ],
+   "notes": "Imported from QLC+ (Smoke)",
+   "looks": [],
+   "look_sets": []
+  }
+ ],
+ "fixtures": [
+  {
+   "id": "fx-laser",
+   "name": "Laser",
+   "profile_id": "generic-3d_animation_rgb_laser_l2600_005",
+   "mode": "Professional DMX 32CH",
+   "output_id": "out-1",
+   "address": 1,
+   "room_id": "room-main",
+   "x": 3.0,
+   "y": 0.6,
+   "z": 2.0,
+   "rotation": 90.0,
+   "enabled": true,
+   "zigbee_device": null,
+   "limits": {
+    "p1_pattern": {
+     "lock": null,
+     "range": null,
+     "require_tags": [],
+     "min_hold_ms": 900
+    },
+    "mode": {
+     "lock": null,
+     "range": null,
+     "require_tags": [],
+     "min_hold_ms": 0
+    }
+   }
+  },
+  {
+   "id": "fx-fog",
+   "name": "Fog",
+   "profile_id": "dmxbridge-fog_01",
+   "mode": "4 Channel",
+   "output_id": "out-r20m9ct",
+   "address": 1,
+   "room_id": "room-main",
+   "x": 3.0,
+   "y": 1.2,
+   "z": 0.3,
+   "rotation": 130.0,
+   "enabled": true,
+   "zigbee_device": null,
+   "limits": {}
+  }
+ ],
+ "rooms": [
+  {
+   "id": "room-main",
+   "name": "Main room",
+   "walls": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     6.0,
+     0.0
+    ],
+    [
+     6.0,
+     4.5
+    ],
+    [
+     0.0,
+     4.5
+    ]
+   ],
+   "ceiling_m": 2.4,
+   "focus": [
+    {
+     "id": "focus-oh8n5bz",
+     "name": "Dance floor",
+     "x": 3.0,
+     "y": 2.3,
+     "z": 1.2,
+     "radius": 2.2,
+     "color": "#ffd27a"
+    }
+   ]
+  }
+ ],
+ "outputs": [
+  {
+   "id": "out-1",
+   "name": "PKnight node",
+   "ip": "192.168.1.230",
+   "net": 0,
+   "subnet": 0,
+   "universe": 0,
+   "enabled": true
+  },
+  {
+   "id": "out-r20m9ct",
+   "name": "Dmxbridge",
+   "ip": "192.168.1.61",
+   "net": 0,
+   "subnet": 0,
+   "universe": 1,
+   "enabled": true
+  }
+ ],
+ "routes": [
+  {
+   "id": "r-kick-pattern",
+   "name": "Kick changes P1 pattern",
+   "group": "",
+   "enabled": false,
+   "source": "kick",
+   "fixtures": [
+    "fx-laser"
+   ],
+   "groups": [
+    "grp-bmfr5dq"
+   ],
+   "rooms": [],
+   "channel": "p1_pattern",
+   "focus": "",
+   "falloff": false,
+   "action": {
+    "type": "random",
+    "tags": [],
+    "hold_ms": 900
+   },
+   "cooldown_ms": 0,
+   "every": 1,
+   "probability": 1.0
+  },
+  {
+   "id": "r-hat-rot",
+   "name": "Hi-hats drive P1 rotation",
+   "group": "",
+   "enabled": false,
+   "source": "kick",
+   "fixtures": [
+    "fx-laser"
+   ],
+   "groups": [],
+   "rooms": [],
+   "channel": "p1_rotation",
+   "focus": "",
+   "falloff": false,
+   "action": {
+    "type": "modulate",
+    "min": 0,
+    "max": 127,
+    "smoothing": 0.59
+   },
+   "cooldown_ms": 0,
+   "every": 1,
+   "probability": 1.0
+  },
+  {
+   "id": "r-axsl0b6",
+   "name": "Kick changes P2 pattern",
+   "group": "",
+   "enabled": false,
+   "source": "bass",
+   "fixtures": [
+    "fx-laser"
+   ],
+   "groups": [],
+   "rooms": [],
+   "channel": "p2_rotation",
+   "focus": "",
+   "falloff": false,
+   "action": {
+    "type": "random",
+    "tags": [],
+    "hold_ms": 500
+   },
+   "cooldown_ms": 0,
+   "every": 1,
+   "probability": 1.0
+  },
+  {
+   "id": "r-15szjd3",
+   "name": "bass change pattern",
+   "group": "",
+   "enabled": false,
+   "source": "bass",
+   "fixtures": [
+    "fx-laser"
+   ],
+   "groups": [],
+   "rooms": [],
+   "channel": "p2_pattern",
+   "focus": "",
+   "falloff": false,
+   "action": {
+    "type": "random",
+    "tags": [],
+    "hold_ms": 500
+   },
+   "cooldown_ms": 0,
+   "every": 1,
+   "probability": 1.0
+  },
+  {
+   "id": "r-s91gdgt",
+   "name": "smoke machine",
+   "group": "",
+   "enabled": false,
+   "source": "bass",
+   "fixtures": [
+    "fx-fog"
+   ],
+   "groups": [],
+   "rooms": [],
+   "channel": "@color",
+   "focus": "focus-oh8n5bz",
+   "falloff": true,
+   "action": {
+    "type": "palette",
+    "palette": "pal-club",
+    "mode": "random",
+    "fade_ms": 150,
+    "brightness": 255
+   },
+   "cooldown_ms": 500,
+   "every": 1,
+   "probability": 1.0
+  }
+ ],
+ "audio": {
+  "device": null,
+  "gain_db": 12.0,
+  "sensitivity": 0.5,
+  "bands": [
+   {
+    "id": "bass",
+    "name": "Bass",
+    "enabled": true,
+    "ranges": [
+     {
+      "lo_hz": 20.0,
+      "hi_hz": 121.0,
+      "weight": 1.0
+     }
+    ],
+    "detect": "transient",
+    "level_threshold": 0.6,
+    "gain_db": 0.5,
+    "sensitivity": 0.35,
+    "min_gap_ms": 220,
+    "release": 0.92,
+    "color": "#ff9a4d"
+   },
+   {
+    "id": "kick",
+    "name": "Kick",
+    "enabled": true,
+    "ranges": [
+     {
+      "lo_hz": 144.0,
+      "hi_hz": 234.0,
+      "weight": 1.0
+     }
+    ],
+    "detect": "transient",
+    "level_threshold": 0.6,
+    "gain_db": 13.0,
+    "sensitivity": 0.5,
+    "min_gap_ms": 140,
+    "release": 0.85,
+    "color": "#ff5c6c"
+   },
+   {
+    "id": "snare",
+    "name": "Snare",
+    "enabled": true,
+    "ranges": [
+     {
+      "lo_hz": 270.0,
+      "hi_hz": 5238.0,
+      "weight": 1.0
+     }
+    ],
+    "detect": "transient",
+    "level_threshold": 0.6,
+    "gain_db": 0.0,
+    "sensitivity": 0.5,
+    "min_gap_ms": 140,
+    "release": 0.85,
+    "color": "#f2b54a"
+   },
+   {
+    "id": "vocals",
+    "name": "Vocals",
+    "enabled": true,
+    "ranges": [
+     {
+      "lo_hz": 370.0,
+      "hi_hz": 3700.0,
+      "weight": 1.0
+     }
+    ],
+    "detect": "transient",
+    "level_threshold": 0.6,
+    "gain_db": 8.0,
+    "sensitivity": 0.0,
+    "min_gap_ms": 250,
+    "release": 0.93,
+    "color": "#45d39a"
+   },
+   {
+    "id": "hat",
+    "name": "Hi-hat",
+    "enabled": true,
+    "ranges": [
+     {
+      "lo_hz": 6000.0,
+      "hi_hz": 16000.0,
+      "weight": 1.0
+     }
+    ],
+    "detect": "transient",
+    "level_threshold": 0.6,
+    "gain_db": 0.0,
+    "sensitivity": 0.5,
+    "min_gap_ms": 70,
+    "release": 0.85,
+    "color": "#4fb3ff"
+   }
+  ]
+ },
+ "zigbee": {
+  "enabled": false,
+  "mode": "usb",
+  "serial_port": "",
+  "adapter": "ember",
+  "channel": 25,
+  "names": {},
+  "host": "localhost",
+  "port": 1883,
+  "username": "",
+  "password": "",
+  "base_topic": "zigbee2mqtt",
+  "max_rate_hz": 10.0,
+  "transition_s": 0.0
+ },
+ "groups": [
+  {
+   "id": "grp-bmfr5dq",
+   "name": "Test1",
+   "color": "#7c5cff",
+   "fixtures": [
+    "fx-laser"
+   ]
+  }
+ ],
+ "presets": [],
+ "palettes": [
+  {
+   "id": "pal-club",
+   "name": "Club",
+   "colors": [
+    "#ff0040",
+    "#7c00ff",
+    "#0040ff",
+    "#00e0ff"
+   ]
+  },
+  {
+   "id": "pal-sunset",
+   "name": "Sunset",
+   "colors": [
+    "#ff2a00",
+    "#ff7a00",
+    "#ffc000",
+    "#ff0060"
+   ]
+  },
+  {
+   "id": "pal-ice",
+   "name": "Ice",
+   "colors": [
+    "#ffffff",
+    "#80d8ff",
+    "#0080ff",
+    "#4040ff"
+   ]
+  },
+  {
+   "id": "pal-rainbow",
+   "name": "Rainbow",
+   "colors": [
+    "#ff0000",
+    "#ff8000",
+    "#ffff00",
+    "#00ff00",
+    "#00ffff",
+    "#0000ff",
+    "#ff00ff"
+   ]
+  },
+  {
+   "id": "pal-forest",
+   "name": "Forest",
+   "colors": [
+    "#00ff40",
+    "#80ff00",
+    "#00c080",
+    "#ffe000"
+   ]
+  },
+  {
+   "id": "pal-white",
+   "name": "White",
+   "colors": [
+    "#ffffff"
+   ]
+  }
+ ],
+ "controls": [],
+ "midi": {
+  "enabled": false,
+  "inputs": []
+ },
+ "active_room": "room-main"
+}
