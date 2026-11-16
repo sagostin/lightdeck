@@ -2,6 +2,8 @@
   import RoomCanvas from "../components/RoomCanvas.svelte";
   import ConfirmButton from "../components/ConfirmButton.svelte";
   import { app, uid, profileOf } from "../lib/store.svelte";
+  import { AIMS, aimAt, aimKind, beamOf, lightSpot } from "../lib/aim";
+  import type { Fixture } from "../lib/types";
 
   const show = app.show!;
   let roomId = $state(show.active_room ?? show.rooms[0]?.id ?? null);
@@ -33,12 +35,31 @@
     for (const r of show.routes) if (r.focus === id) { r.focus = ""; r.falloff = false; }
     selectedFocus = null;
   }
-  /** Point a fixture's facing at a focus point. */
-  function aim(f: { x: number; y: number; rotation: number }, fp: { x: number; y: number }) {
-    if (Math.hypot(fp.x - f.x, fp.y - f.y) < 0.05) return;
-    f.rotation = Math.round(((Math.atan2(fp.y - f.y, fp.x - f.x) * 180) / Math.PI + 360) % 360);
+  /**
+   * Point a fixture at a focus point. Aimed fixtures get facing and tilt so the beam's centre
+   * lands on the floor at the point (or at the point's height, for fixtures on the floor);
+   * fixtures that aren't aimed just turn to face it.
+   */
+  function aim(f: Fixture, fp: { x: number; y: number; z: number }) {
+    if (f.tilt === null || f.tilt === undefined) {
+      if (Math.hypot(fp.x - f.x, fp.y - f.y) < 0.05) return;
+      f.rotation = Math.round(((Math.atan2(fp.y - f.y, fp.x - f.x) * 180) / Math.PI + 360) % 360);
+      return;
+    }
+    const a = aimAt(f, { x: fp.x, y: fp.y, z: f.z > 0.5 ? 0 : fp.z });
+    if (a) { f.rotation = a.rotation; f.tilt = a.tilt; }
   }
-  function aimAll(fp: { x: number; y: number }) {
+  function setAim(f: Fixture, id: string) {
+    const preset = AIMS.find((a) => a.id === id)!;
+    f.tilt = preset.id === "angled" && f.tilt !== null && f.tilt !== undefined && Math.abs(f.tilt) < 89.99 ? f.tilt : preset.tilt;
+  }
+  const spotText = (f: Fixture) => {
+    const s = room ? lightSpot(f, room) : null;
+    if (!s) return "";
+    const at = `${s.x.toFixed(1)}, ${s.y.toFixed(1)} m`;
+    return s.on === "floor" ? `Lands on the floor at ${at}` : s.on === "ceiling" ? `Lights the ceiling at ${at}` : `Hits the wall ${s.z.toFixed(1)} m up, at ${at}`;
+  };
+  function aimAll(fp: { x: number; y: number; z: number }) {
     for (const f of show.fixtures) if (f.room_id === roomId) aim(f, fp);
   }
 
@@ -105,10 +126,30 @@
             <label>Facing (°)</label><input type="number" step="5" bind:value={sel.rotation} />
           </div>
           <input type="range" min="0" max="355" step="5" bind:value={sel.rotation} />
+          {#if profileOf(sel)?.kind !== "laser" && profileOf(sel)?.kind !== "fog"}
+            <span class="small muted">Points</span>
+            <div class="seg">
+              {#each AIMS as a}<button class:sel={aimKind(sel.tilt) === a.id} onclick={() => setAim(sel, a.id)}>{a.label}</button>{/each}
+            </div>
+            {#if aimKind(sel.tilt) === "angled"}
+              <label class="small">Tilt <span class="mono">{sel.tilt}°</span> <span class="faint">(below 0 points down, above 0 up)</span></label>
+              <input type="range" min="-89" max="89" step="1" bind:value={sel.tilt} />
+            {/if}
+            {#if aimKind(sel.tilt) !== "none"}
+              <div class="grid2">
+                <label>Beam (°)</label>
+                <input type="number" min="1" max="170" step="1" placeholder={String(beamOf({ ...sel, beam_deg: null }, profileOf(sel)))}
+                  value={sel.beam_deg ?? ""} oninput={(e) => { const v = e.currentTarget.value; sel.beam_deg = v === "" ? null : +v; }} />
+              </div>
+              <span class="small faint">{spotText(sel)}. Effects use this spot.</span>
+            {:else}
+              <span class="small faint">Not aimed: the map shows a direction only, and effects use where the fixture hangs.</span>
+            {/if}
+          {/if}
           {#if room.focus.length}
             <div class="row wrap small">
               <span class="faint">Aim at</span>
-              {#each room.focus as fp (fp.id)}<button class="ghost" onclick={() => aim(sel, fp)}>{fp.name}</button>{/each}
+              {#each room.focus as fp (fp.id)}<button class="ghost" onclick={() => aim(sel, fp)} title={sel.tilt === null || sel.tilt === undefined ? "Turn to face it" : "Point the beam's centre at it"}>{fp.name}</button>{/each}
             </div>
           {/if}
           <button onclick={() => { sel.room_id = null; selected = null; }}>Remove from room</button>
@@ -157,6 +198,9 @@
 </div>
 
 <style>
+  .seg { display: flex; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; border-radius: 0; padding: 3px 6px; background: transparent; font-size: 12px; }
+  .seg button.sel { background: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text); }
   .rooms { display: flex; gap: 16px; align-items: flex-start; }
   .list { width: 180px; flex-shrink: 0; }
   .item { text-align: left; }

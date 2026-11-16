@@ -9,6 +9,8 @@ export interface Mode { name: string; channels: string[]; heads: Head[] }
 export interface Profile {
   id: string; manufacturer: string; model: string; kind: string;
   channels: ChannelDef[]; modes: Mode[]; notes: string;
+  /** Beam angle in degrees; 0 = use the default for the kind. */
+  beam_deg?: number;
   looks: Look[]; look_sets: LookSet[];
 }
 /** A pattern plus secondary options (several channel values) applied together. */
@@ -47,6 +49,10 @@ export interface Limit { lock: number | null; range: [number, number] | null; re
 export interface Fixture {
   id: string; name: string; profile_id: string; mode: string; output_id: string; address: number;
   room_id: string | null; x: number; y: number; z: number; rotation: number; enabled: boolean;
+  /** Degrees up from horizontal: -90 = straight down, 90 = straight up; null = not aimed. */
+  tilt?: number | null;
+  /** Beam angle override in degrees. */
+  beam_deg?: number | null;
   zigbee_device: string | null;
   limits: Record<string, Limit>;
 }

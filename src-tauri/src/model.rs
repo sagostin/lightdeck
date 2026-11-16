@@ -270,6 +270,8 @@ pub struct Profile {
     pub channels: Vec<ChannelDef>,
     pub modes: Vec<Mode>,
     pub notes: String,
+    /// Beam angle in degrees (0 = use the default for the kind).
+    pub beam_deg: f32,
     /// Saved looks: a pattern plus secondary options, applied together.
     pub looks: Vec<Look>,
     /// Named groups of looks ("Chill", "Drop"…).
@@ -451,6 +453,15 @@ pub struct Fixture {
     pub y: f32,
     pub z: f32,
     pub rotation: f32,
+    /// Where it points, in degrees up from horizontal: -90 = straight down at the floor,
+    /// 90 = straight up at the ceiling. None = not aimed (effects use the fixture's position).
+    pub tilt: Option<f32>,
+    /// Beam angle in degrees, overriding the fixture type's.
+    pub beam_deg: Option<f32>,
+    /// Where the beam's centre lands (floor, ceiling or wall), worked out from the aim.
+    /// Not saved: recalculated whenever the show goes live (see `Show::place_lights`).
+    #[serde(skip)]
+    pub spot: Option<[f32; 3]>,
     pub enabled: bool,
     /// Zigbee2MQTT friendly name. When set, the fixture is sent over Zigbee
     /// instead of Art-Net (output_id and address are ignored).
@@ -673,7 +684,77 @@ impl Show {
             }
         }
         self.version = SHOW_VERSION;
+        self.place_lights();
     }
+
+    /// Work out where every aimed fixture's light lands. Called by `migrate`, which runs
+    /// whenever a show goes live.
+    pub fn place_lights(&mut self) {
+        let rooms = self.rooms.clone();
+        for f in &mut self.fixtures {
+            let room = f.room_id.as_ref().and_then(|id| rooms.iter().find(|r| &r.id == id));
+            f.spot = light_spot(f, room);
+        }
+    }
+}
+
+impl Fixture {
+    /// Where effects treat this fixture as being: where its light lands if it's aimed,
+    /// otherwise where it hangs.
+    pub fn pos(&self) -> (f32, f32, f32) {
+        match self.spot {
+            Some([x, y, z]) => (x, y, z),
+            None => (self.x, self.y, self.z),
+        }
+    }
+}
+
+/// Ceiling height used when a room doesn't say.
+pub const DEFAULT_CEILING_M: f32 = 3.0;
+/// How far a beam is followed when it hits nothing (no walls drawn, pointing level).
+const MAX_THROW_M: f32 = 30.0;
+
+/// Where an aimed fixture's beam centre lands: the floor (z = 0), the ceiling, or the
+/// first wall in the way. None if the fixture isn't aimed.
+pub fn light_spot(f: &Fixture, room: Option<&Room>) -> Option<[f32; 3]> {
+    let deg = f.tilt?.clamp(-90.0, 90.0);
+    let (tilt, heading) = (deg.to_radians(), f.rotation.to_radians());
+    // Straight up/down exactly (cos 90° isn't quite 0 in floating point).
+    let d = if deg.abs() >= 89.99 { [0.0, 0.0, deg.signum()] } else { [tilt.cos() * heading.cos(), tilt.cos() * heading.sin(), tilt.sin()] };
+    let ceiling = room.map(|r| r.ceiling_m).filter(|c| *c > 0.0).unwrap_or(DEFAULT_CEILING_M);
+    let mut t = if d[2] < -1e-4 {
+        f.z.max(0.0) / -d[2]
+    } else if d[2] > 1e-4 {
+        (ceiling - f.z).max(0.0) / d[2]
+    } else {
+        MAX_THROW_M
+    };
+    if let Some(walls) = room.map(|r| &r.walls).filter(|w| w.len() >= 3) {
+        if let Some(s) = ray_hits_wall([f.x, f.y], [d[0], d[1]], walls) {
+            t = t.min(s);
+        }
+    }
+    Some([f.x + t * d[0], f.y + t * d[1], (f.z + t * d[2]).clamp(0.0, ceiling)])
+}
+
+/// Smallest s > 0 where the 2D ray `p + s·d` crosses one of the polygon's edges.
+pub fn ray_hits_wall(p: [f32; 2], d: [f32; 2], walls: &[[f32; 2]]) -> Option<f32> {
+    let mut best: Option<f32> = None;
+    for i in 0..walls.len() {
+        let (a, b) = (walls[i], walls[(i + 1) % walls.len()]);
+        let e = [b[0] - a[0], b[1] - a[1]];
+        let den = d[0] * e[1] - d[1] * e[0];
+        if den.abs() < 1e-6 {
+            continue; // parallel
+        }
+        let w = [a[0] - p[0], a[1] - p[1]];
+        let s = (w[0] * e[1] - w[1] * e[0]) / den; // along the ray
+        let u = (w[0] * d[1] - w[1] * d[0]) / den; // along the edge
+        if s > 1e-4 && (-1e-4..=1.0 + 1e-4).contains(&u) {
+            best = Some(best.map_or(s, |b: f32| b.min(s)));
+        }
+    }
+    best
 }
 
 impl Default for AudioSettings {
@@ -804,6 +885,53 @@ impl Default for RouteAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn aimed(x: f32, y: f32, z: f32, rotation: f32, tilt: Option<f32>) -> Fixture {
+        Fixture { x, y, z, rotation, tilt, ..Default::default() }
+    }
+    fn room() -> Room {
+        Room { walls: vec![[0.0, 0.0], [8.0, 0.0], [8.0, 6.0], [0.0, 6.0]], ceiling_m: 3.0, ..Default::default() }
+    }
+    fn near(a: [f32; 3], b: [f32; 3]) -> bool {
+        a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01)
+    }
+
+    #[test]
+    fn light_lands_where_it_points() {
+        let r = room();
+        // not aimed: no spot, effects use the fixture's position
+        let f = aimed(2.0, 2.0, 2.5, 0.0, None);
+        assert_eq!(light_spot(&f, Some(&r)), None);
+        assert_eq!(f.pos(), (2.0, 2.0, 2.5));
+        // straight down / up
+        assert!(near(light_spot(&aimed(2.0, 2.0, 2.5, 0.0, Some(-90.0)), Some(&r)).unwrap(), [2.0, 2.0, 0.0]));
+        assert!(near(light_spot(&aimed(2.0, 2.0, 0.2, 0.0, Some(90.0)), Some(&r)).unwrap(), [2.0, 2.0, 3.0]));
+        // 45° down from 2 m facing +x lands 2 m away on the floor
+        assert!(near(light_spot(&aimed(2.0, 2.0, 2.0, 0.0, Some(-45.0)), Some(&r)).unwrap(), [4.0, 2.0, 0.0]));
+        // a wall in the way: uplight at 30° facing the near wall hits the wall first
+        let wash = light_spot(&aimed(7.5, 3.0, 0.2, 0.0, Some(30.0)), Some(&r)).unwrap();
+        assert!(near(wash, [8.0, 3.0, 0.2 + 0.5 * 30f32.to_radians().tan()]), "{wash:?}");
+        // pointing level across the room hits the far wall at its own height
+        assert!(near(light_spot(&aimed(1.0, 3.0, 1.5, 180.0, Some(0.0)), Some(&r)).unwrap(), [0.0, 3.0, 1.5]));
+        // no room: default ceiling, no walls
+        assert!(near(light_spot(&aimed(0.0, 0.0, 1.0, 0.0, Some(90.0)), None).unwrap(), [0.0, 0.0, DEFAULT_CEILING_M]));
+        // tilt is clamped
+        assert!(near(light_spot(&aimed(2.0, 2.0, 2.5, 0.0, Some(-400.0)), Some(&r)).unwrap(), [2.0, 2.0, 0.0]));
+    }
+
+    #[test]
+    fn migrate_places_lights_and_spots_are_not_saved() {
+        let mut s = Show { rooms: vec![Room { id: "r".into(), ..room() }], ..Default::default() };
+        s.fixtures.push(Fixture { id: "f".into(), room_id: Some("r".into()), x: 4.0, y: 3.0, z: 2.8, tilt: Some(-90.0), ..Default::default() });
+        s.migrate();
+        assert_eq!(s.fixtures[0].pos(), (4.0, 3.0, 0.0));
+        let json = serde_json::to_value(&s).unwrap();
+        assert!(json["fixtures"][0].get("spot").is_none());
+        assert_eq!(json["fixtures"][0]["tilt"], -90.0);
+        // old shows without the fields still load
+        let old: Fixture = serde_json::from_str(r#"{"id":"x","x":1,"y":2,"z":3,"rotation":90}"#).unwrap();
+        assert_eq!((old.tilt, old.beam_deg, old.spot), (None, None, None));
+    }
+
     #[test]
     fn migrates_v1_bands() {
         let mut s: Show = serde_json::from_str(

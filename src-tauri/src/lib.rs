@@ -555,6 +555,7 @@ fn default_show() -> Show {
             enabled: true,
             zigbee_device: None,
             limits: laser_limits,
+            ..Default::default()
         },
         Fixture {
             id: "fx-fog".into(),
@@ -571,6 +572,7 @@ fn default_show() -> Show {
             enabled: true,
             zigbee_device: None,
             limits: HashMap::new(),
+            ..Default::default()
         },
     ];
     let routes = vec![

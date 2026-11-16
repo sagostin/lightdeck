@@ -91,6 +91,17 @@ pub fn import(xml: &str) -> Result<Profile, String> {
         modes.push(Mode { name: "Default".into(), channels: channels.iter().map(|c| c.key.clone()).collect(), heads: vec![] });
     }
 
+    // Beam angle from <Physical><Lens DegreesMin/DegreesMax> (0 = not given).
+    let beam_deg = root
+        .descendants()
+        .find(|n| n.has_tag_name("Lens"))
+        .map(|l| {
+            let deg = |a: &str| l.attribute(a).and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
+            if deg("DegreesMax") > 0.0 { deg("DegreesMax") } else { deg("DegreesMin") }
+        })
+        .unwrap_or(0.0)
+        .clamp(0.0, 180.0);
+
     Ok(Profile {
         id: format!("{}-{}", slug(&manufacturer), slug(&model)),
         manufacturer,
@@ -99,6 +110,7 @@ pub fn import(xml: &str) -> Result<Profile, String> {
         channels,
         modes,
         notes: format!("Imported from QLC+ ({qtype})"),
+        beam_deg,
         looks: vec![],
         look_sets: vec![],
     })
@@ -227,5 +239,16 @@ mod tests {
         assert_eq!(p.modes[0].heads[1].channels, vec!["p2_pattern"]);
         assert!(p.channels[0].value_blocked(150));
         assert!(!p.channels[0].value_blocked(50));
+    }
+
+    #[test]
+    fn reads_the_lens_beam_angle() {
+        let xml = |lens: &str| format!(r#"<FixtureDefinition><Manufacturer>M</Manufacturer><Model>P</Model><Type>Color Changer</Type>
+            <Channel Name="Dimmer"><Group Byte="0">Intensity</Group></Channel>
+            <Mode Name="1ch"><Channel Number="0">Dimmer</Channel></Mode>
+            <Physical>{lens}</Physical></FixtureDefinition>"#);
+        assert_eq!(super::import(&xml(r#"<Lens Name="PC" DegreesMin="15" DegreesMax="40"/>"#)).unwrap().beam_deg, 40.0);
+        assert_eq!(super::import(&xml(r#"<Lens Name="Other" DegreesMin="25" DegreesMax="0"/>"#)).unwrap().beam_deg, 25.0);
+        assert_eq!(super::import(&xml("")).unwrap().beam_deg, 0.0);
     }
 }

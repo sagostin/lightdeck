@@ -242,7 +242,10 @@ fn compute(
         // Brightness multiplier for "fade with distance" (1 everywhere when off).
         let fall = |fx: &Fixture| -> f32 {
             match focus {
-                Some(f) if route.falloff => (1.0 - ((fx.x - f.x).powi(2) + (fx.y - f.y).powi(2)).sqrt() / f.radius.max(0.1)).clamp(0.0, 1.0),
+                Some(f) if route.falloff => {
+                    let (x, y, _) = fx.pos();
+                    (1.0 - ((x - f.x).powi(2) + (y - f.y).powi(2)).sqrt() / f.radius.max(0.1)).clamp(0.0, 1.0)
+                }
                 _ => 1.0,
             }
         };
@@ -398,7 +401,8 @@ fn compute(
                     .iter()
                     .map(|(fx, _)| match focus {
                         Some(f) => {
-                            let d = ((fx.x - f.x).powi(2) + (fx.y - f.y).powi(2)).sqrt() / f.radius.max(0.1);
+                            let (x, y, _) = fx.pos();
+                            let d = ((x - f.x).powi(2) + (y - f.y).powi(2)).sqrt() / f.radius.max(0.1);
                             1.0 / (1.0 + d * d * 4.0)
                         }
                         None => 1.0,
@@ -612,7 +616,10 @@ fn pulse_value(p: Option<&Pulse>, off: u8, now: Instant) -> u8 {
 /// Next fixture for node hop: one of the two nearest (in 3D) not visited recently.
 /// With a focus point, hops start nearest it and are pulled back towards it.
 fn hop_next(targets: &[&Fixture], st: &RouteState, focus: Option<(f32, f32, f32)>) -> String {
-    let d2 = |f: &Fixture, (x, y, z): (f32, f32, f32)| (f.x - x).powi(2) + (f.y - y).powi(2) + (f.z - z).powi(2);
+    let d2 = |f: &Fixture, (x, y, z): (f32, f32, f32)| {
+        let (fx, fy, fz) = f.pos();
+        (fx - x).powi(2) + (fy - y).powi(2) + (fz - z).powi(2)
+    };
     let cur = st.hop_current.as_ref().and_then(|id| targets.iter().find(|f| &f.id == id));
     let Some(cur) = cur else {
         return match focus {
@@ -624,7 +631,7 @@ fn hop_next(targets: &[&Fixture], st: &RouteState, focus: Option<(f32, f32, f32)
         .iter()
         .filter(|f| f.id != cur.id && !st.hop_recent.contains(&f.id))
         // 3D: height counts too, so a ceiling bulb isn't "next to" the floor par below it.
-        .map(|f| (*f, d2(f, (cur.x, cur.y, cur.z)) + focus.map(|p| 0.5 * d2(f, p)).unwrap_or(0.0)))
+        .map(|f| (*f, d2(f, cur.pos()) + focus.map(|p| 0.5 * d2(f, p)).unwrap_or(0.0)))
         .collect();
     if cands.is_empty() {
         cands = targets.iter().filter(|f| f.id != cur.id).map(|f| (*f, 0.0)).collect();
@@ -748,6 +755,31 @@ pub fn route_targets<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn effects_use_where_the_light_lands() {
+        // Two pars hung side by side at the back wall: one aimed down, one thrown across the room.
+        let room = Room { id: "r".into(), walls: vec![[0.0, 0.0], [10.0, 0.0], [10.0, 6.0], [0.0, 6.0]], ceiling_m: 3.0, ..Default::default() };
+        let par = |id: &str, x: f32, tilt: Option<f32>| Fixture {
+            id: id.into(), room_id: Some("r".into()), x, y: 0.5, z: 2.5, rotation: 90.0, tilt, ..Default::default()
+        };
+        let mut show = Show { rooms: vec![room], fixtures: vec![par("down", 1.0, Some(-90.0)), par("throw", 1.2, Some(-30.0)), par("plain", 1.1, None)], ..Default::default() };
+        show.migrate();
+        let t: Vec<(&Fixture, LookChans)> = show.fixtures.iter().map(|f| (f, LookChans::default())).collect();
+        // Along y (front to back) the thrown par is far from the others, though they hang together.
+        let pos = normalized_positions(&t, "y", (0.0, 0.0, 0.0));
+        assert!(pos[0] < 0.01 && pos[2] < 0.01, "{pos:?}");
+        assert!((pos[1] - 0.85).abs() < 1e-3, "{pos:?}"); // 0.85 = the far end (a gap is left for wrapping)
+        let (_, y, z) = show.fixtures[1].pos();
+        assert!((y - (0.5 + 2.5 / 30f32.to_radians().tan())).abs() < 0.01 && z == 0.0);
+        // Node hop distances use the spots too: from "down", "plain" (0.1 m away) is nearer than "throw".
+        let st = RouteState { hop_current: Some("down".into()), ..Default::default() };
+        let refs: Vec<&Fixture> = show.fixtures.iter().collect();
+        let picks: std::collections::HashSet<String> = (0..20).map(|_| hop_next(&refs, &st, None)).collect();
+        assert!(picks.contains("plain"));
+        // centroid of the three is pulled out into the room by the thrown one
+        assert!(centroid(&refs).1 > 1.0);
+    }
 
     fn fixture(id: &str, profile: &str, x: f32, z: f32) -> Fixture {
         Fixture { id: id.into(), profile_id: profile.into(), mode: "Default".into(), x, z, enabled: true, ..Default::default() }
@@ -1196,18 +1228,22 @@ fn normalized_positions(t: &[(&Fixture, LookChans)], axis: &str, origin: (f32, f
         return t
             .iter()
             .map(|(f, _)| {
-                let a = (f.x - ox).atan2(-(f.y - oy)); // -pi..pi, 0 = towards the front wall
+                let (x, y, _) = f.pos();
+                let a = (x - ox).atan2(-(y - oy)); // -pi..pi, 0 = towards the front wall
                 (a / std::f32::consts::TAU + 1.0).fract()
             })
             .collect();
     }
     let raw: Vec<f32> = t
         .iter()
-        .map(|(f, _)| match axis {
-            "y" => f.y,
-            "height" => f.z,
-            "radial" => ((f.x - ox).powi(2) + (f.y - oy).powi(2)).sqrt(),
-            _ => f.x,
+        .map(|(f, _)| {
+            let (x, y, z) = f.pos();
+            match axis {
+                "y" => y,
+                "height" => z,
+                "radial" => ((x - ox).powi(2) + (y - oy).powi(2)).sqrt(),
+                _ => x,
+            }
         })
         .collect();
     let (lo, hi) = raw.iter().fold((f32::MAX, f32::MIN), |(a, b), v| (a.min(*v), b.max(*v)));
@@ -1332,9 +1368,9 @@ pub fn motion_value(m: &Motion, base: u8, ctx: &MotionCtx, catalog: &[u8]) -> u8
 fn centroid(fx: &[&Fixture]) -> (f32, f32, f32) {
     let n = fx.len().max(1) as f32;
     (
-        fx.iter().map(|f| f.x).sum::<f32>() / n,
-        fx.iter().map(|f| f.y).sum::<f32>() / n,
-        fx.iter().map(|f| f.z).sum::<f32>() / n,
+        fx.iter().map(|f| f.pos().0).sum::<f32>() / n,
+        fx.iter().map(|f| f.pos().1).sum::<f32>() / n,
+        fx.iter().map(|f| f.pos().2).sum::<f32>() / n,
     )
 }
 

@@ -88,7 +88,7 @@ Colour palette modes:
 
 ### Focus points
 
-Effects and node hop are calculated **from** a point: by default the centre of the route's targets, or a [focus point](rooms-and-patch.md#focus-points) you place in a room (the DJ booth, the dance floor). Pick it in the route's **from** setting.
+Effects and node hop are calculated **from** a point: by default the centre of the route's targets, or a [focus point](rooms-and-patch.md#focus-points) you place in a room (the DJ booth, the dance floor). Pick it in the route's **from** setting. For fixtures that are [aimed](rooms-and-patch.md#aiming-where-the-light-lands), distances and positions are measured from where each beam lands rather than where the fixture hangs.
 
 | With a focus point | |
 |---|---|

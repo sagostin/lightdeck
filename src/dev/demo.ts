@@ -50,10 +50,13 @@ export function demoShow(sample: Show): Show {
   const ring = [[1.2, 0.8], [3, 0.4], [5, 0.4], [6.8, 0.8], [6.8, 5.2], [5, 5.6], [3, 5.6], [1.2, 5.2]];
   ring.forEach(([x, y], i) => {
     const rot = (Math.atan2(3 - y, 4 - x) * 180) / Math.PI;
-    fixtures.push(fixture(`fx-par${i + 1}`, `Par ${i + 1}`, PAR.id, "6 Channel", "out-b", 10 + i * 6, "room-main", x, y, 2.4, rot));
+    // Angled down so each beam lands on the floor part-way to the middle.
+    const tilt = -Math.round((Math.atan2(2.4, Math.hypot(4 - x, 3 - y) * 0.6) * 180) / Math.PI);
+    fixtures.push({ ...fixture(`fx-par${i + 1}`, `Par ${i + 1}`, PAR.id, "6 Channel", "out-b", 10 + i * 6, "room-main", x, y, 2.4, rot), tilt });
   });
+  // Bar pars point straight down at the bar.
   [[1, 1], [3, 1], [5, 1]].forEach(([x, y], i) =>
-    fixtures.push(fixture(`fx-bar${i + 1}`, `Bar par ${i + 1}`, PAR.id, "6 Channel", "out-b", 60 + i * 6, "room-bar", x, y, 2.2, 90)));
+    fixtures.push({ ...fixture(`fx-bar${i + 1}`, `Bar par ${i + 1}`, PAR.id, "6 Channel", "out-b", 60 + i * 6, "room-bar", x, y, 2.2, 90), tilt: -90 }));
 
   const pars = fixtures.filter((f) => f.id.startsWith("fx-par")).map((f) => f.id);
   const front = pars.slice(0, 4);

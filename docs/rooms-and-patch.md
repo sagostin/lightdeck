@@ -16,11 +16,28 @@ Fixtures belong to one room (or none). On the Rooms screen:
 
 - **Place** brings a fixture from the "not in this room" list into the room.
 - Drag fixtures to position them.
-- Select one to set **X**, **Y**, **Height** and **Facing** exactly. The facing angle sets the direction the beam is drawn in.
+- Select one to set **X**, **Y**, **Height** and **Facing** exactly. Facing is the compass direction it points in on the plan.
 
 Positions matter: **node hop** moves to the nearest fixture in 3D (height included), **Spread** palettes order colours by position, and **waves** sweep across positions.
 
-With a fixture selected, **Aim at** turns its facing towards one of the room's focus points.
+### Aiming: where the light lands
+
+Lights (anything but lasers and fog) can also be aimed up or down. Under **Points**, choose:
+
+| Points | Use for |
+|---|---|
+| **Not set** | The default. The map draws a direction only, and effects use where the fixture hangs. |
+| **Down** | Downlights and pars pointing straight at the floor. |
+| **Up** | Uplights washing the ceiling. |
+| **Angled** | Anything in between: set the **Tilt** (below 0 points down, above 0 up). |
+
+Once a fixture is aimed:
+
+- **The map draws its footprint:** the area the beam lights, traced to the floor, the ceiling (dashed outline) or the first wall in the way. It's worked out from the height, facing, tilt, beam angle and the room's **ceiling** height. A dashed line runs from the fixture to the centre of its beam, and the panel says where that is ("Lands on the floor at 3.1, 2.3 m").
+- **Effects use where the light lands**, not where the fixture hangs. Waves, palette spreads and rings, falloff from a focus point, twinkle clustering and node hop all work from each beam's centre. Two pars hung side by side, one pointing down and one thrown across the room, are treated as far apart, because that's how they look.
+- **Beam (°)** sets the beam angle. It defaults to the fixture type's beam angle (set on **Fixture types**, and read from QLC+ files that give a lens angle), or 25° for pars, 15° for moving heads, 60° for strobes, 120° for Zigbee bulbs and 30° for anything else.
+
+**Aim at** a focus point turns a fixture that isn't aimed to face it. For an aimed fixture it sets both facing and tilt, so the beam's centre lands on the floor at the point (or at the point's height, for fixtures standing on the floor). **Aim every fixture here at it** (on a selected focus point) does the same for the whole room.
 
 ### Focus points
 

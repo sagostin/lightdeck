@@ -34,6 +34,7 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/lib/controllers.ts` | Built-in controller layouts, auto-mapping, learning profiles |
 | `src/lib/scenes.ts` | Scene (preset route state) editing helpers |
 | `src/lib/library.ts` | Fixture library: comparing and merging fixture types and their looks |
+| `src/lib/aim.ts` | Fixture aiming: where a beam lands and its footprint (mirrors `light_spot` in model.rs) |
 | `src/lib/rig.ts` | Reading fixture capabilities without app state (shared by templates and auto-mapping) |
 | `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Designer, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
 | `src/components/` | Shared UI: SceneBuilder, SceneEditor, ControllerSetup, RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |

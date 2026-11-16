@@ -20,7 +20,7 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
 - **Fixtures:** import QLC+ `.qxf` fixture files, or paste any manual's DMX chart and have an AI model convert it. Tag individual values and ranges ("blocked", "safe", "peak"…), and browse a laser's patterns on the real device to build a catalogue of the looks you like.
 - **Fixture library:** keep fixture types and their looks for every project. Projects copy from it and merge updates both ways without losing venue-only looks. Export and import `.lightdeck-fixture` files to share them.
 - **Two-head lasers:** fixtures with several projectors (P1/P2) show and route each head separately.
-- **Rooms and layout:** draw rooms to scale, place fixtures with height and direction, use several rooms per project, and add **focus points** (DJ booth, dance floor) that effects ripple out from, rotate around or fade with distance from.
+- **Rooms and layout:** draw rooms to scale, place fixtures with height and direction, aim lights at the floor, ceiling or an angle and see where each beam lands (effects then work from the lit spots), use several rooms per project, and add **focus points** (DJ booth, dance floor) that effects ripple out from, rotate around or fade with distance from.
 - **Audio detection:** configurable bands on a live spectrum (Kick, Bass, Snare, Vocals, Hi-hat by default; add your own). A band can listen to several frequency ranges, and each has its own gain, sensitivity and detection mode. LightDeck also tracks BPM and the beat.
 - **Routes:** connect a sound (a hit or a level) to an action on fixtures.
   - Channel actions: flash, random value from your catalogue, node hop (nearest neighbour in 3D), modulate, cycle.

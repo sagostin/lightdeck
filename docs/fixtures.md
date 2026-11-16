@@ -53,6 +53,8 @@ Select a type to edit its manufacturer, model and **kind** (laser, par, fog, mov
 
 The **group** of each channel matters too: *intensity* channels follow the master fader and blackout; *intensity* and *colour* channels are what effects drive.
 
+**Beam** (next to the kind, for lights) is the beam angle used to draw where [aimed](rooms-and-patch.md#aiming-where-the-light-lands) fixtures of this type light. It's filled in from QLC+ files that give a lens angle. Leave it empty for the default for the kind.
+
 **Export…** saves the fixture type, with its looks, as a `.lightdeck-fixture` file. **Import LightDeck fixture** brings types in from any of these:
 
 - a `.lightdeck-fixture` file;

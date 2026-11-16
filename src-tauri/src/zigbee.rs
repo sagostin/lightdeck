@@ -846,6 +846,8 @@ pub fn builtin_profiles() -> Vec<Profile> {
         modes: vec![Mode { name: "Default".into(), channels: chans.iter().map(|c| c.key.clone()).collect(), heads: vec![] }],
         channels: chans,
         notes: "Built-in profile for Zigbee lights.".into(),
+        // Bulbs light broadly.
+        beam_deg: 120.0,
         looks: vec![],
         look_sets: vec![],
     };

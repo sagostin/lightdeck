@@ -8,6 +8,7 @@
   import { app, toast } from "../lib/store.svelte";
   import { GROUPS, KINDS, type Profile } from "../lib/types";
   import { addCopy, compare, describeDiff, mergeInto, saveToLibrary } from "../lib/library";
+  import { defaultBeam } from "../lib/aim";
 
   const show = app.show!;
   let selectedId = $state<string | null>(show.profiles[0]?.id ?? null);
@@ -254,6 +255,11 @@
           <input bind:value={sel.manufacturer} placeholder="Manufacturer" />
           <input class="grow" bind:value={sel.model} placeholder="Model" />
           <select bind:value={sel.kind}>{#each KINDS as k}<option>{k}</option>{/each}</select>
+          {#if sel.kind !== "laser" && sel.kind !== "fog"}
+            <label class="beam small" title="Beam angle, used to draw where aimed fixtures of this type light. Each fixture can override it.">Beam
+              <input type="number" min="0" max="170" step="1" placeholder={String(defaultBeam(sel.kind))}
+                value={sel.beam_deg || ""} oninput={(e) => (sel!.beam_deg = +e.currentTarget.value || 0)} />°</label>
+          {/if}
           <button onclick={aiRetag}>✦ AI tag</button>
           <button onclick={() => exportFile([sel], sel.model)}>Export…</button>
           <ConfirmButton class="danger" onconfirm={() => removeProfile(sel)}>Delete</ConfirmButton>
@@ -346,6 +352,8 @@
   .caps .lbl { min-width: 240px; }
   .caps tr.blk td { background: #ff5c6c0c; }
   .sw { display: inline-block; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line-2); }
+  .beam { display: flex; align-items: center; gap: 4px; margin: 0; white-space: nowrap; }
+  .beam input { width: 56px; }
   .modes { display: flex; gap: 4px; }
   .modes button { flex: 1; font-size: 12px; padding: 4px 6px; }
   .modes button.on, .item.on { background: var(--accent-bg); border-color: var(--accent); }

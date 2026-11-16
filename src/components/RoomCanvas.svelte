@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, fixtureLook, profileOf } from "../lib/store.svelte";
   import type { Room } from "../lib/types";
+  import { beamOf, footprint, lightSpot } from "../lib/aim";
 
   let {
     room,
@@ -143,6 +144,16 @@
       <polygon points={beam(cx, cy, fx.rotation, 260, 22)} fill={look.color} opacity={0.08 + 0.3 * look.intensity} />
     {:else if kind === "fog"}
       <circle {cx} {cy} r={30 + 50 * look.intensity} fill={look.color} opacity={0.25 * look.intensity} />
+    {:else if fx.tilt !== null && fx.tilt !== undefined}
+      <!-- Aimed: draw where the beam actually lands (floor, ceiling or wall). -->
+      {@const spot = lightSpot(fx, room)!}
+      {@const pts = footprint(fx, beamOf(fx, profileOf(fx)), room)}
+      <polygon points={pts.map((p) => `${p.x * S},${p.y * S}`).join(" ")} fill={look.color}
+        opacity={(spot.on === "ceiling" ? 0.12 : 0.22) + (spot.on === "ceiling" ? 0.2 : 0.4) * look.intensity}
+        class="spot" class:ceiling={spot.on === "ceiling"} style="--c:{look.color}" />
+      <line x1={cx} y1={cy} x2={spot.x * S} y2={spot.y * S} class="aimline" />
+      <circle cx={spot.x * S} cy={spot.y * S} r="4" class="spotdot" style="--c:{look.color}" />
+      <circle {cx} {cy} r={20} fill={look.color} opacity={0.3 * look.intensity} class="glow" />
     {:else}
       <polygon points={beam(cx, cy, fx.rotation, 120, 18)} fill={look.color} opacity={0.4 * look.intensity} />
       <circle {cx} {cy} r={28} fill={look.color} opacity={0.35 * look.intensity} class="glow" />
@@ -164,6 +175,10 @@
 </svg>
 
 <style>
+  .spot { stroke: var(--c); stroke-width: 2; stroke-opacity: 0.6; }
+  .spot.ceiling { stroke-dasharray: 8 6; }
+  .aimline { stroke: #ffffff40; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .spotdot { fill: var(--c); stroke: #000a; stroke-width: 1.5; }
   svg { width: 100%; display: block; background: #0a0b10; border-radius: 10px; border: 1px solid var(--line); touch-action: none; user-select: none; }
   .grid { stroke: #ffffff08; stroke-width: 1; }
   .grid.major { stroke: #ffffff12; }
