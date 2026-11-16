@@ -4,4 +4,6 @@ src-tauri/target
 src-tauri/gen
 .DS_Store
 zigbee-helper/node_modules
+zigbee-helper/staged
+zigbee-helper/.runtime-cache
 zigbee-helper/runtime

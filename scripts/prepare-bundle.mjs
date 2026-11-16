@@ -1,48 +1,79 @@
-// Runs before `tauri build` (release builds only, via src-tauri/tauri.bundle.json).
-// Makes the Zigbee helper self-contained so the app works without Node installed:
-//  1. installs zigbee-helper/node_modules if missing
-//  2. downloads the official Node.js runtime for the target into zigbee-helper/runtime/
+// Runs before `tauri build` for release builds (via src-tauri/tauri.bundle.json).
+// Stages a self-contained Zigbee helper in zigbee-helper/staged/ for the build target:
+//  - index.mjs, package.json and node_modules (installed if missing)
+//  - native addon prebuilds for the target only (others are dropped: they bloat the app,
+//    and linuxdeploy fails on ELF files for other architectures when making the AppImage)
+//  - the official Node.js runtime for the target in runtime/ (SHA-256 checked, cached in
+//    zigbee-helper/.runtime-cache/ between builds)
 // The target comes from TAURI_ENV_TARGET_TRIPLE (set by the Tauri CLI), else this machine.
 // Override the Node version with NODE_RUNTIME_VERSION=v24.x.y.
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const helper = join(root, "zigbee-helper");
-const runtime = join(helper, "runtime");
+const stage = join(helper, "staged");
+const cache = join(helper, ".runtime-cache");
 const NODE_MAJOR = 24;
 
+// Rust target triple → [Node.js download platform, prebuild os, prebuild arch]
 const TRIPLES = {
-  "aarch64-apple-darwin": "darwin-arm64",
-  "x86_64-apple-darwin": "darwin-x64",
-  "x86_64-unknown-linux-gnu": "linux-x64",
-  "aarch64-unknown-linux-gnu": "linux-arm64",
-  "x86_64-pc-windows-msvc": "win-x64",
-  "aarch64-pc-windows-msvc": "win-arm64",
+  "aarch64-apple-darwin": ["darwin-arm64", "darwin", "arm64"],
+  "x86_64-apple-darwin": ["darwin-x64", "darwin", "x64"],
+  "x86_64-unknown-linux-gnu": ["linux-x64", "linux", "x64"],
+  "aarch64-unknown-linux-gnu": ["linux-arm64", "linux", "arm64"],
+  "x86_64-pc-windows-msvc": ["win-x64", "win32", "x64"],
+  "aarch64-pc-windows-msvc": ["win-arm64", "win32", "arm64"],
 };
 
-function hostPlatform() {
-  const os = { darwin: "darwin", linux: "linux", win32: "win" }[process.platform];
-  const arch = { arm64: "arm64", x64: "x64" }[process.arch];
-  if (!os || !arch) throw new Error(`Unsupported host ${process.platform}-${process.arch}`);
-  return `${os}-${arch}`;
+function hostTriple() {
+  const key = `${process.platform}-${process.arch}`;
+  const t = {
+    "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-apple-darwin",
+    "linux-x64": "x86_64-unknown-linux-gnu", "linux-arm64": "aarch64-unknown-linux-gnu",
+    "win32-x64": "x86_64-pc-windows-msvc", "win32-arm64": "aarch64-pc-windows-msvc",
+  }[key];
+  if (!t) throw new Error(`Unsupported host ${key}`);
+  return t;
 }
 
-const triple = process.env.TAURI_ENV_TARGET_TRIPLE;
-const platform = triple ? TRIPLES[triple] : hostPlatform();
-if (!platform) throw new Error(`No Node.js runtime mapping for target ${triple}`);
+const triple = process.env.TAURI_ENV_TARGET_TRIPLE || hostTriple();
+if (!TRIPLES[triple]) throw new Error(`No Node.js runtime mapping for target ${triple}`);
+const [platform, pbOs, pbArch] = TRIPLES[triple];
+const win = pbOs === "win32";
+const log = (m) => console.log(`[prepare-bundle] ${m}`);
 
-// 1. helper dependencies
+// ---- 1. helper dependencies --------------------------------------------------
 if (!existsSync(join(helper, "node_modules"))) {
-  console.log("[prepare-bundle] installing zigbee-helper dependencies");
+  log("installing zigbee-helper dependencies");
   execSync("npm ci --omit=dev", { cwd: helper, stdio: "inherit" });
 }
 
-// 2. Node runtime
+// ---- 2. stage the helper with only this target's prebuilds -------------------
+/** Keep a file under a `prebuilds/` folder only if it's for this target. */
+function keep(src) {
+  const parts = src.split(sep);
+  const i = parts.lastIndexOf("prebuilds");
+  if (i < 0 || i + 1 >= parts.length) return true;
+  const dir = parts[i + 1]; // e.g. darwin-x64+arm64, linux-x64, win32-ia32
+  const [os, archs = ""] = dir.split("-");
+  if (os !== pbOs || !archs.split("+").includes(pbArch)) return false;
+  // glibc builds only (the AppImage and .deb/.rpm target glibc distros)
+  if (parts.length > i + 2 && basename(src).includes(".musl.")) return false;
+  return true;
+}
+
+rmSync(stage, { recursive: true, force: true });
+mkdirSync(stage, { recursive: true });
+for (const f of ["index.mjs", "package.json"]) copyFileSync(join(helper, f), join(stage, f));
+cpSync(join(helper, "node_modules"), join(stage, "node_modules"), { recursive: true, filter: keep, verbatimSymlinks: true });
+log(`staged helper for ${triple} (prebuilds: ${pbOs}-${pbArch})`);
+
+// ---- 3. Node runtime ----------------------------------------------------------
 async function resolveVersion() {
   if (process.env.NODE_RUNTIME_VERSION) return process.env.NODE_RUNTIME_VERSION;
   const res = await fetch("https://nodejs.org/dist/index.json");
@@ -59,18 +90,26 @@ async function download(url) {
   return Buffer.from(await res.arrayBuffer());
 }
 
-const version = await resolveVersion();
-const stamp = `${version} ${platform}`;
-const stampFile = join(runtime, ".target");
-const exe = platform.startsWith("win") ? "node.exe" : "node";
+/** Extract `members` of an archive into `cwd`. */
+function extract(cwd, archive, members) {
+  if (archive.endsWith(".zip")) {
+    // Use Windows' own bsdtar: Git for Windows puts GNU tar first on PATH, and it can't read zips.
+    const tar = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
+    execFileSync(tar, ["-xf", archive, ...members], { cwd, stdio: "inherit" });
+  } else {
+    execFileSync("tar", ["-xzf", archive, ...members], { cwd, stdio: "inherit" });
+  }
+}
 
-if (existsSync(stampFile) && readFileSync(stampFile, "utf8").trim() === stamp && existsSync(join(runtime, exe))) {
-  console.log(`[prepare-bundle] Node.js ${stamp} already present`);
-} else {
+const version = await resolveVersion();
+const exe = win ? "node.exe" : "node";
+const cached = join(cache, `${version}-${platform}`);
+
+if (!existsSync(join(cached, exe))) {
   const base = `node-${version}-${platform}`;
-  const file = platform.startsWith("win") ? `${base}.zip` : `${base}.tar.gz`;
+  const file = win ? `${base}.zip` : `${base}.tar.gz`;
   const dist = `https://nodejs.org/dist/${version}`;
-  console.log(`[prepare-bundle] downloading ${dist}/${file}`);
+  log(`downloading ${dist}/${file}`);
   const [archive, sums] = await Promise.all([download(`${dist}/${file}`), download(`${dist}/SHASUMS256.txt`)]);
 
   const expected = sums.toString().split("\n").map((l) => l.trim().split(/\s+/)).find(([, name]) => name === file)?.[0];
@@ -79,19 +118,26 @@ if (existsSync(stampFile) && readFileSync(stampFile, "utf8").trim() === stamp &&
 
   const tmp = mkdtempSync(join(tmpdir(), "lightdeck-node-"));
   try {
-    const archivePath = join(tmp, file);
-    writeFileSync(archivePath, archive);
-    const inner = platform.startsWith("win") ? `${base}/node.exe` : `${base}/bin/node`;
-    // bsdtar (macOS, Windows 10+) and GNU tar both handle these; Windows tar also reads .zip.
-    execSync(`tar -xf "${file}" "${inner}" "${base}/LICENSE"`, { cwd: tmp, stdio: "inherit" });
-    rmSync(runtime, { recursive: true, force: true });
-    mkdirSync(runtime, { recursive: true });
-    copyFileSync(join(tmp, inner), join(runtime, exe));
-    copyFileSync(join(tmp, base, "LICENSE"), join(runtime, "LICENSE"));
-    if (!platform.startsWith("win")) chmodSync(join(runtime, exe), 0o755);
-    writeFileSync(stampFile, stamp + "\n");
+    writeFileSync(join(tmp, file), archive);
+    const inner = win ? `${base}/node.exe` : `${base}/bin/node`;
+    extract(tmp, file, [inner, `${base}/LICENSE`]);
+    rmSync(cached, { recursive: true, force: true });
+    mkdirSync(cached, { recursive: true });
+    copyFileSync(join(tmp, inner), join(cached, exe));
+    copyFileSync(join(tmp, base, "LICENSE"), join(cached, "LICENSE"));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
-  console.log(`[prepare-bundle] bundled Node.js ${stamp}`);
+}
+
+const runtime = join(stage, "runtime");
+mkdirSync(runtime, { recursive: true });
+copyFileSync(join(cached, exe), join(runtime, exe));
+copyFileSync(join(cached, "LICENSE"), join(runtime, "LICENSE"));
+if (!win) chmodSync(join(runtime, exe), 0o755);
+writeFileSync(join(runtime, ".target"), `${version} ${platform}\n`);
+log(`bundled Node.js ${version} (${platform})`);
+// Sanity check that the staged helper is complete.
+for (const p of ["index.mjs", "node_modules", join("runtime", exe)]) {
+  if (!existsSync(join(stage, p))) throw new Error(`staged helper is missing ${p}`);
 }

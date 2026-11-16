@@ -72,8 +72,9 @@ npm run release:build
 
 This is `tauri build` with `src-tauri/tauri.bundle.json` merged in. That config:
 
-- runs `scripts/prepare-bundle.mjs` before bundling, which installs `zigbee-helper/node_modules` if needed and downloads the current Node.js 24 LTS for the build target into `zigbee-helper/runtime/` (checked against the official SHA-256 sums, reused on later builds)
-- adds `zigbee-helper/runtime/` to the app's resources
+- runs `scripts/prepare-bundle.mjs` before bundling. It installs `zigbee-helper/node_modules` if needed, then stages a copy of the helper in `zigbee-helper/staged/` with only the build target's native serial-port files, plus the current Node.js 24 LTS for that target (checked against the official SHA-256 sums and cached in `zigbee-helper/.runtime-cache/`)
+- bundles `zigbee-helper/staged/` as the app's Zigbee helper
+- ad-hoc signs the macOS app (see below)
 
 Output lands in `src-tauri/target/release/bundle/`. For an Intel build on an Apple Silicon Mac:
 
@@ -81,17 +82,19 @@ Output lands in `src-tauri/target/release/bundle/`. For an Intel build on an App
 rustup target add x86_64-apple-darwin && npm run release:build -- --target x86_64-apple-darwin
 ```
 
-Plain `npx tauri build` still works and makes a smaller app that uses the Node.js installed on the machine (see [Zigbee](zigbee.md#requirements)). Set `NODE_RUNTIME_VERSION=v24.x.y` to pin the bundled Node version.
+Use `npm run release:build` rather than plain `npx tauri build`: the plain build doesn't include the Zigbee helper, so USB Zigbee only works on the machine that built it. Set `NODE_RUNTIME_VERSION=v24.x.y` to pin the bundled Node version.
 
 ## Unsigned builds
 
-Builds are not code-signed by default:
+Builds aren't signed with a developer certificate by default:
 
-- **macOS** shows "can't be opened because it is from an unidentified developer" (or "is damaged" for downloaded files). Right-click the app and choose **Open**, or run:
+- **macOS** builds are *ad-hoc* signed (`signingIdentity: "-"` in `tauri.bundle.json`). Without any signature, a downloaded Apple Silicon app is reported as **"damaged and can't be opened"**. With the ad-hoc signature it's blocked as *not verified* instead, which you can allow: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (on macOS 14 and earlier, right-clicking the app and choosing **Open** also works). Or remove the download flag in Terminal:
 
   ```bash
   xattr -dr com.apple.quarantine /Applications/LightDeck.app
   ```
+
+  Ad-hoc builds turn off the hardened runtime, which needs a real certificate and would otherwise block the microphone without extra entitlements.
 
 - **Windows** SmartScreen shows a warning. Choose **More info → Run anyway**.
 
@@ -106,10 +109,11 @@ With an Apple Developer account, add these repository secrets (*Settings → Sec
 | `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | For notarization: your Apple ID, an app-specific password, and team ID |
 
-See Tauri's [macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) for details. The bundled Node binary is already signed by the Node.js project. If notarization rejects it, re-sign it with your identity in `prepare-bundle.mjs`.
+Then in `src-tauri/tauri.bundle.json`, remove `"signingIdentity": "-"` and set `"hardenedRuntime": true`. Notarization needs the hardened runtime, and with it LightDeck needs an entitlements file granting `com.apple.security.device.audio-input` (microphone), set as `bundle.macOS.entitlements`. See Tauri's [macOS signing guide](https://v2.tauri.app/distribute/sign/macos/). The bundled Node binary is already signed by the Node.js project. If notarization rejects it, re-sign it with your identity in `prepare-bundle.mjs`.
 
 ## Platform notes
 
+- **Linux** AppImages are built with linuxdeploy. The workflow sets `APPIMAGE_EXTRACT_AND_RUN=1` and `NO_STRIP=true`, and builds with `--verbose` so a failure shows linuxdeploy's own output.
 - **Linux** builds on Ubuntu 22.04 and needs WebKitGTK 4.1 and ALSA at runtime (present on most desktops). For the Zigbee dongle, add yourself to the `dialout` group: `sudo usermod -aG dialout $USER`, then log out and in.
 - **Windows** may need the dongle's USB serial driver (CP210x or CH340), depending on the stick.
 - LightDeck is developed and tested on macOS. Windows and Linux builds compile and pass the tests in CI, but haven't been tried with real hardware.

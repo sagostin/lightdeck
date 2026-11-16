@@ -132,4 +132,4 @@ The Zigbee helper test starts the real Node helper without a dongle, so it needs
 
 ## Packaging notes
 
-`npm run release:build` merges `src-tauri/tauri.bundle.json`, which runs `scripts/prepare-bundle.mjs` to download the target's Node.js runtime into `zigbee-helper/runtime/` and bundles it with the helper. `Zigbee::find_node` prefers `LIGHTDECK_NODE`, then `<helper>/runtime/node`, then a system Node. Plain `npx tauri build` skips the runtime. CI and releases are in `.github/workflows/`; see [Building and releasing](releasing.md).
+`npm run release:build` merges `src-tauri/tauri.bundle.json`, which runs `scripts/prepare-bundle.mjs` to stage the helper in `zigbee-helper/staged/` (only the target's native prebuilds, plus the target's Node.js runtime in `runtime/`) and bundles that folder as `zigbee-helper/`. It also ad-hoc signs the macOS app. `Zigbee::find_node` prefers `LIGHTDECK_NODE`, then `<helper>/runtime/node`, then a system Node. In development (and plain `npx tauri build`) the helper runs from the source folder. CI and releases are in `.github/workflows/`; see [Building and releasing](releasing.md).

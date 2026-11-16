@@ -36,11 +36,6 @@
     ],
     "macOS": {
       "infoPlist": "Info.plist"
-    },
-    "resources": {
-      "../zigbee-helper/index.mjs": "zigbee-helper/index.mjs",
-      "../zigbee-helper/package.json": "zigbee-helper/package.json",
-      "../zigbee-helper/node_modules/": "zigbee-helper/node_modules/"
     }
   }
 }

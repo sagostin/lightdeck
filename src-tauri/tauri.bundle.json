@@ -5,10 +5,11 @@
   },
   "bundle": {
     "resources": {
-      "../zigbee-helper/index.mjs": "zigbee-helper/index.mjs",
-      "../zigbee-helper/package.json": "zigbee-helper/package.json",
-      "../zigbee-helper/node_modules/": "zigbee-helper/node_modules/",
-      "../zigbee-helper/runtime/": "zigbee-helper/runtime/"
+      "../zigbee-helper/staged/": "zigbee-helper/"
+    },
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
     }
   }
 }

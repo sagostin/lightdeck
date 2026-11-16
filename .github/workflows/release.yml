@@ -61,9 +61,11 @@ jobs:
           | Windows | `LightDeck_*_x64-setup.exe` or `.msi` |
           | Linux | `.AppImage`, `.deb` or `.rpm` |
 
-          **macOS:** open the `.dmg` and drag LightDeck to Applications. These builds are unsigned, so the
-          first time, right-click the app and choose **Open** (or run
-          `xattr -dr com.apple.quarantine /Applications/LightDeck.app`).
+          **macOS:** open the `.dmg` and drag LightDeck to Applications. The app isn't notarized by Apple,
+          so the first time you open it macOS blocks it. Open **System Settings → Privacy & Security**,
+          scroll down and click **Open Anyway** (on macOS 14 and earlier you can also right-click the app
+          and choose **Open**). Or run once in Terminal:
+          `xattr -dr com.apple.quarantine /Applications/LightDeck.app`
 
           **Windows:** SmartScreen may warn about an unknown publisher. Choose **More info → Run anyway**.
           EOF
@@ -129,6 +131,10 @@ jobs:
         env:
           # Lay out the DMG window (app icon + Applications shortcut) even on CI.
           TAURI_BUNDLER_DMG_IGNORE_CI: "true"
+          # AppImage: run linuxdeploy without FUSE, and don't let its old `strip` touch
+          # newer binaries (a common cause of "failed to run linuxdeploy").
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "true"
           # Code signing (optional). Add these repository secrets, then uncomment:
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -136,7 +142,7 @@ jobs:
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx tauri build --ci --target ${{ matrix.target }} --config src-tauri/tauri.bundle.json
+        run: npx tauri build --ci --verbose --target ${{ matrix.target }} --config src-tauri/tauri.bundle.json
 
       - name: Upload installers to the draft release
         shell: bash

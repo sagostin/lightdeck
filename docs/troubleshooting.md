@@ -12,6 +12,10 @@ echo 'export PATH="/opt/homebrew/opt/rustup/bin:$PATH"' >> ~/.zshrc && source ~/
 
 **Port 1420 already in use**: another `tauri dev` is still running. Quit it, or stop it with `pkill -f "vite"`.
 
+## macOS says LightDeck "is damaged" or "can't be verified"
+
+Downloaded builds aren't notarized by Apple. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/LightDeck.app`. "Damaged" (rather than "can't be verified") means the build has no signature at all. Release builds are now ad-hoc signed to avoid that, so rebuild if an older download shows it; see [Building and releasing](releasing.md#unsigned-builds).
+
 ## No audio
 
 - Check the **Audio** screen's status line for an error.
@@ -43,7 +47,7 @@ It's in an auto or sound mode. Lock its Mode channel to a DMX-manual value under
 
 ## Zigbee
 
-**"Node.js wasn't found"**: only happens when running from source or a plain `npx tauri build`. Install Node (`brew install node`), set `LIGHTDECK_NODE` to its full path, or use a release build, which includes Node.
+**"Node.js wasn't found"**: only happens when running from source. Install Node (`brew install node`), set `LIGHTDECK_NODE` to its full path, or use a release build, which includes Node.
 
 **"Zigbee helper isn't installed"**: run `npm install` in `zigbee-helper/`.
 

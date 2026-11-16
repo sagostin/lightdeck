@@ -42,7 +42,7 @@ Screenshots use the built-in demo show (see [Development](#development)).
 
 ## Download
 
-Installers for macOS (Apple Silicon and Intel), Windows and Linux are on the [Releases](https://github.com/sagostin/lightdeck/releases) page. Builds are unsigned: on macOS right-click the app and choose **Open** the first time. See [Building and releasing](docs/releasing.md#unsigned-builds).
+Installers for macOS (Apple Silicon and Intel), Windows and Linux are on the [Releases](https://github.com/sagostin/lightdeck/releases) page. Builds aren't notarized: the first time you open LightDeck on macOS, click **Open Anyway** in *System Settings → Privacy & Security*. See [Building and releasing](docs/releasing.md#unsigned-builds).
 
 ## Quick start
 
