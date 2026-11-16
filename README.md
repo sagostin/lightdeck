@@ -32,6 +32,12 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
 - **Outputs:** Art-Net to any node (e.g. PKnight). Zigbee lights work either through a USB dongle, with LightDeck as the coordinator (no hub or MQTT needed), or through an existing Zigbee2MQTT setup.
 - **Projects:** `.lightdeck` project files, autosave, and export/import of app settings.
 
+See the full [feature list](docs/features.md).
+
+### Coming next
+
+Planned work includes pixel bars and LED strips with per-cell effects, a starter pack of common fixture types (generic RGB/RGBW pars, LED bars, dimmers, moving heads), Open Fixture Library import, MIDI pad feedback, moving heads that follow the room plan, sACN and USB DMX output, and an autopilot that switches scenes on builds and drops. See the [roadmap](docs/roadmap.md).
+
 ## Screenshots
 
 | | |
@@ -81,6 +87,7 @@ Pushing a `v*` tag to GitHub builds macOS, Windows and Linux installers automati
 
 | Guide | What's in it |
 |---|---|
+| [Features](docs/features.md) | Everything LightDeck does today, by area |
 | [Getting started](docs/getting-started.md) | Install, first launch, connecting a node, a first audio-reactive route |
 | [Fixture types](docs/fixtures.md) | Importing QLC+ files, AI interpretation, tags, the fixture library, the pattern browser, laser safety and ceiling limits |
 | [Rooms, patch and groups](docs/rooms-and-patch.md) | Drawing rooms, patching fixtures, limits, fixture groups, Art-Net outputs |
@@ -93,6 +100,7 @@ Pushing a `v*` tag to GitHub builds macOS, Windows and Linux installers automati
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |
 | [Building and releasing](docs/releasing.md) | Local release builds, GitHub Actions CI and releases, versioning, signing |
 | [Architecture](docs/architecture.md) | For developers: code layout, engine, data model, helper protocol, tests |
+| [Roadmap](docs/roadmap.md) | Planned and possible features: pixel bars, fixture packs, moving heads, more outputs, autopilot |
 
 ## Keyboard shortcuts
 
