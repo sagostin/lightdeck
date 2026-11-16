@@ -29,13 +29,14 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/lib/types.ts` | TypeScript mirror of the Rust model, plus presets and labels |
 | `src/lib/genres.ts` | Genre presets: detection tuning and lighting-style notes |
 | `src/lib/design.ts` | Design plan types, applying a plan to the show, preview text |
-| `src/lib/templates.ts` | Setup templates: rule-based plans built from the rig |
+| `src/lib/blocks.ts` | Scene building blocks: rig analysis, the block catalogue, building scenes of blocks into a plan |
+| `src/lib/templates.ts` | Setup templates: fixed scene lists made of blocks |
 | `src/lib/controllers.ts` | Built-in controller layouts, auto-mapping, learning profiles |
 | `src/lib/scenes.ts` | Scene (preset route state) editing helpers |
 | `src/lib/library.ts` | Fixture library: comparing and merging fixture types and their looks |
 | `src/lib/rig.ts` | Reading fixture capabilities without app state (shared by templates and auto-mapping) |
 | `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Designer, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
-| `src/components/` | Shared UI: RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |
+| `src/components/` | Shared UI: SceneBuilder, SceneEditor, ControllerSetup, RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |
 | `src-tauri/src/model.rs` | The show format (serde), defaults, migrations |
 | `src-tauri/src/engine.rs` | The frame loop, routes, effects, limits, target resolution |
 | `src-tauri/src/audio.rs` | Input via `cpal`, FFT bands, onset and level detection, BPM and beat clock |
@@ -134,7 +135,7 @@ During development, opening `http://localhost:1420` in a normal browser (while `
 ```bash
 npm test                       # both of the below
 cd src-tauri && cargo test     # Rust: importer, Art-Net, migrations, targets, effects, Zigbee (incl. the real helper), MIDI, controls, AI designer
-npm run test:ui                # UI logic in tests/: genre presets, applying designs, scenes, controller auto-mapping, templates, fixture library merging
+npm run test:ui                # UI logic in tests/: genre presets, applying designs, scenes, controller auto-mapping, building blocks, templates, fixture library merging
 npm run check                  # UI type-check
 ```
 

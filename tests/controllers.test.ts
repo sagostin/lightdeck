@@ -101,3 +101,34 @@ test("learning builds a profile in press order, once per input", () => {
   assert.deepEqual(p.pads.map((i) => [i.number, i.label]), [[40, "Pad 1"], [41, "Pad 2"]]);
   assert.deepEqual(p.faders, [{ kind: "cc", number: 7, label: "Fader 1" }]);
 });
+
+test("mapping status notices changed scenes and dead controls", async () => {
+  const { mappingStatus, isDead } = await import("../src/lib/controllers.ts");
+  const show = sceneRig();
+  assert.deepEqual(mappingStatus(show, automap(show, apc, DEFAULT_AUTOMAP)), { mapped: 0, dead: 0, changed: false }, "nothing mapped yet");
+  applyAutomap(show, automap(show, apc, DEFAULT_AUTOMAP));
+  assert.deepEqual(mappingStatus(show, automap(show, apc, DEFAULT_AUTOMAP)), { mapped: show.controls.length, dead: 0, changed: false });
+  // the same actions on other pads is not "changed"…
+  const moved = structuredClone(show);
+  moved.controls.forEach((c) => { if (c.trigger.source === "midi") c.trigger.number = 127 - c.trigger.number; });
+  assert.equal(mappingStatus(moved, automap(show, apc, DEFAULT_AUTOMAP)).changed, false);
+  // …but a controller that can't hold everything (the Launchpad has no faders) is
+  assert.equal(mappingStatus(show, automap(show, launchpad, DEFAULT_AUTOMAP)).changed, true);
+  // add a scene: the mapping is out of date
+  show.presets.push({ id: "new", name: "Encore", color: "#fff", values: [], routes: {}, exclusive: false });
+  assert.equal(mappingStatus(show, automap(show, apc, DEFAULT_AUTOMAP)).changed, true);
+  // remove a scene and the strobe routes: their controls are dead
+  const drop = show.presets.find((p) => p.name === "Drop")!;
+  show.presets = show.presets.filter((p) => p !== drop);
+  show.routes = show.routes.filter((r) => r.action.type !== "strobe");
+  const st = mappingStatus(show, automap(show, apc, DEFAULT_AUTOMAP));
+  assert.equal(st.dead, 4, "Drop pad and key, Strobe pad and key");
+  assert.ok(show.controls.filter((c) => isDead(show, c)).some((c) => c.name === "Strobe (hold)"));
+  // re-mapping fixes it, and leaves no strobe or fog control for things the rig no longer has
+  applyAutomap(show, automap(show, apc, DEFAULT_AUTOMAP));
+  assert.deepEqual(mappingStatus(show, automap(show, apc, DEFAULT_AUTOMAP)), { mapped: show.controls.length, dead: 0, changed: false });
+  assert.ok(!show.controls.some((c) => c.name.startsWith("Strobe")));
+  show.fixtures = show.fixtures.filter((f) => f.id !== "fog");
+  applyAutomap(show, automap(show, apc, DEFAULT_AUTOMAP));
+  assert.ok(!show.controls.some((c) => c.name.startsWith("Fog")), "no fog machine, no fog pad");
+});

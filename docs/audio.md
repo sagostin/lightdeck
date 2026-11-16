@@ -61,7 +61,21 @@ The spectrum shows live audio from 20 Hz to 20 kHz with each band's ranges drawn
 
 ### Tuning for a genre
 
-**Tune for a genre…** under Global sensitivity retunes the bands for a style of music: house, techno, trance, drum & bass, dubstep, hip-hop, reggaeton, pop, rock or ambient. It changes sensitivity and timing, and adds a band where the genre needs one (a Clap band for house, Sub-bass for dubstep). See [Genre presets](designer.md#genre-presets) for what each genre changes.
+**Tune for a genre…** under Global sensitivity sets up detection for a style of music: house, techno, trance, drum & bass, dubstep, hip-hop, reggaeton, pop, rock or ambient.
+
+A genre is a complete band set. It has every band it uses, each with its detection mode, sensitivity, minimum gap, release and level line, plus the global sensitivity. Picking one never applies straight away; it shows a preview first:
+
+- **What changes**, band by band (for example "release: 0.85 → 0.80"), which bands are added, and the global sensitivity.
+- **Missing bands are always created.** If you've deleted bands, the genre puts the ones it uses back, the same way every time.
+- **Kick moves first** if it isn't already, because the first band drives the beat clock.
+- **Keep my frequency ranges and gains** (on by default) leaves the ranges and gains of bands you already have alone. They depend more on your room and microphone than on the music. Your band names, colours and muted bands are always kept.
+- **Your other bands** (ones the genre doesn't use) are kept, and listed with how many routes and controls use them. Tick **Remove the bands … doesn't use** to remove them; any routes that used them are switched off and flagged on the Routes screen.
+
+Click **Apply and replace these settings** (or **Apply** if nothing is overwritten), or **Cancel**. **Undo** next to the menu puts detection, and any routes that were switched off, back. When detection already matches a genre, the menu marks it **current**.
+
+### Removing bands
+
+Deleting a band switches off the routes that used it. Routes whose band no longer exists are highlighted on the Routes screen with a note to pick a new sound, and the Audio screen shows how many there are. Renaming a band only changes its display name, so routes keep working.
 
 ## Other sources
 

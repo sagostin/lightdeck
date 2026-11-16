@@ -92,13 +92,14 @@ test("the plan checker used above does catch broken plans", () => {
   const look = bad.routes.find((r) => r.action.type === "look")!;
   look.groups = ["nope"];
   bad.routes.find((r) => r.action.type === "twinkle")!.source = "theremin";
+  bad.routes.find((r) => r.action.type === "modulate")!.source = "vocals";
   const flash = bad.routes.find((r) => r.channel === "@intensity")!;
   flash.channel = "@pan";
   bad.presets[0].routes["ghost"] = true;
   bad.controls.push({ id: "c", name: "Dup", enabled: true, trigger: { source: "key", kind: "note", channel: 0, number: 0, key: "x", mode: "on" }, action: { type: "preset", preset: "nope" } },
     { id: "d", name: "Dup2", enabled: true, trigger: { source: "key", kind: "note", channel: 0, number: 0, key: "x", mode: "on" }, action: { type: "blackout" } });
   const problems = planProblems(rig, bad).join("\n");
-  for (const m of ["unknown group nope", "unknown source theremin", "unknown fixture ghost-fixture", "effect reaches no colour fixture", "no target has channel @pan", "unknown route ghost", "unknown preset", "used twice"])
+  for (const m of ["unknown group nope", "unknown source theremin", "unknown fixture ghost-fixture", "effect reaches no colour fixture", "no target has channel @pan", "unknown route ghost", "unknown preset", "used twice", "modulate needs a level source"])
     assert.match(problems, new RegExp(m));
 });
 

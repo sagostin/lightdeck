@@ -5,7 +5,8 @@
   import ConfirmButton from "../components/ConfirmButton.svelte";
   import { app, toast } from "../lib/store.svelte";
   import { BAND_PRESETS, bandSpan, type BandDef, type BandPreset } from "../lib/types";
-  import { GENRES, applyGenre } from "../lib/genres";
+  import GenreTune from "../components/GenreTune.svelte";
+  import { missingBand, removeBand } from "../lib/genres";
 
   const show = app.show!;
   let devices = $state<string[]>([]);
@@ -40,10 +41,12 @@
     [show.audio.bands[i], show.audio.bands[j]] = [show.audio.bands[j], show.audio.bands[i]];
   }
   const usedBy = (id: string) => show.routes.filter((r) => r.source === id || r.source === `${id}.level`).length;
-  function removeBand(b: BandDef) {
-    show.audio.bands.splice(show.audio.bands.indexOf(b), 1);
+  function deleteBand(b: BandDef) {
+    const off = removeBand(show, b.id);
     selected = show.audio.bands[0]?.id ?? null;
+    if (off.length) toast(`Switched off ${off.length} route(s) that used ${b.name}: pick a new sound for them on the Routes screen`);
   }
+  const orphaned = $derived(show.routes.filter((r) => missingBand(show, r.source)).length);
   function addRange(b: BandDef) {
     const last = b.ranges.at(-1);
     const lo = last ? Math.min(16000, last.hi_hz * 1.5) : 400;
@@ -61,14 +64,6 @@
   }
   const out = (id: string) => f?.bands.find((o) => o.id === id);
 
-  function tuneFor(sel: HTMLSelectElement) {
-    const id = sel.value;
-    sel.value = "";
-    const g = GENRES.find((x) => x.id === id);
-    if (!g) return;
-    const changed = applyGenre(show, g);
-    toast(`Tuned for ${g.name}: ${changed.join(", ") || "sensitivity"}`);
-  }
 </script>
 
 <div class="col">
@@ -88,10 +83,11 @@
       <div class="meter"><i style="width:{(f?.level ?? 0) * 100}%"></i></div>
       <label>Global sensitivity <span class="mono">{Math.round(show.audio.sensitivity * 100)}%</span></label>
       <input type="range" min="0" max="1" step="0.01" bind:value={show.audio.sensitivity} />
-      <select onchange={(e) => tuneFor(e.currentTarget)} title="Retune the bands' sensitivity and timing for a style of music (adds a band or two where the genre needs it)">
-        <option value="">Tune for a genre…</option>
-        {#each GENRES as g}<option value={g.id}>{g.name} ({g.bpm[0]}–{g.bpm[1]} BPM)</option>{/each}
-      </select>
+      <GenreTune />
+      {#if orphaned}
+        <div class="tag warn orphan">{orphaned} route{orphaned === 1 ? " uses a band" : "s use bands"} that no longer exist{orphaned === 1 ? "s" : ""}.
+          <button class="ghost" onclick={() => (app.view = "routes")}>Review on Routes</button></div>
+      {/if}
       <div class="small">
         {#if f?.running}<span class="tag accent">Listening</span> {f.device} · {f.sample_rate} Hz · {f.bpm.toFixed(1)} BPM
         {:else}<span class="tag warn">Not running</span> {f?.error ?? ""}{/if}
@@ -188,7 +184,7 @@
         <div class="row">
           <button class="ghost" onclick={() => savePreset(b)}>Save as preset</button>
           <span class="grow"></span>
-          <ConfirmButton onconfirm={() => removeBand(b)} confirmLabel={usedBy(b.id) ? "Routes use it. Delete?" : "Delete?"}>Delete</ConfirmButton>
+          <ConfirmButton onconfirm={() => deleteBand(b)} confirmLabel={usedBy(b.id) ? "Routes use it. Delete?" : "Delete?"}>Delete</ConfirmButton>
         </div>
       </div>
     {/each}
@@ -202,6 +198,7 @@
 </div>
 
 <style>
+  .orphan { display: block; white-space: normal; padding: 6px 8px; line-height: 1.4; }
   .top { display: flex; gap: 16px; align-items: flex-start; }
   .settings { width: 320px; flex-shrink: 0; }
   label { margin-top: 4px; display: flex; justify-content: space-between; }

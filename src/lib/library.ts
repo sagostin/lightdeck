@@ -3,6 +3,7 @@
 // never changes an existing show by surprise. Copying either way merges looks: new and
 // changed looks come across, looks that exist only on the receiving side are kept.
 import type { Profile } from "./types";
+import { clone } from "./clone";
 
 /** Everything about a type except its looks (channels, tags, blocked values, modes…). */
 export function definition(p: Profile) {
@@ -25,7 +26,7 @@ export interface Diff {
 
 /** How `other` differs from `mine`, from `mine`'s point of view. */
 export function compare(mine: Profile, other: Profile): Diff {
-  const byId = (p: Profile) => new Map<string, unknown>([...p.looks.map((l): [string, unknown] => [`l:${l.id}`, l]), ...p.look_sets.map((s): [string, unknown] => [`s:${s.id}`, s])]);
+  const byId = (p: Profile) => new Map<string, unknown>([...(p.looks ?? []).map((l): [string, unknown] => [`l:${l.id}`, l]), ...(p.look_sets ?? []).map((s): [string, unknown] => [`s:${s.id}`, s])]);
   const a = byId(mine), b = byId(other);
   let incoming = 0, local = 0, changed = 0;
   for (const [k, v] of b) { if (!a.has(k)) incoming++; else if (!same(a.get(k), v)) changed++; }
@@ -41,7 +42,7 @@ export interface MergeResult { added: number; updated: number; kept: number; def
  * are merged by id (source wins for ones in both), and target-only ones are kept.
  */
 export function mergeInto(target: Profile, source: Profile): MergeResult {
-  const src = structuredClone(source);
+  const src = clone(source);
   const defChanged = !same(definition(target), definition(src));
   Object.assign(target, definition(src));
   const merge = <T extends { id: string }>(mine: T[], theirs: T[]) => {
@@ -62,15 +63,15 @@ export function mergeInto(target: Profile, source: Profile): MergeResult {
 
 /** Save a project's type to the library (adding it, or merging into the library's copy). */
 export function saveToLibrary(library: Profile[], p: Profile): { library: Profile[]; result: MergeResult | null } {
-  const lib = structuredClone(library);
+  const lib = clone(library);
   const entry = lib.find((x) => x.id === p.id);
-  if (!entry) { lib.push(structuredClone(p)); return { library: lib, result: null }; }
+  if (!entry) { lib.push(clone(p)); return { library: lib, result: null }; }
   return { library: lib, result: mergeInto(entry, p) };
 }
 
 /** Add a type to a project's list: as itself, or as a copy with a new id if the id is taken. */
 export function addCopy(profiles: Profile[], p: Profile, suffix = Math.random().toString(36).slice(2, 6)): Profile {
-  const c = structuredClone(p);
+  const c = clone(p);
   if (profiles.some((x) => x.id === c.id)) {
     c.id = `${c.id}-${suffix}`;
     c.model = `${c.model} (copy)`;

@@ -434,6 +434,23 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
             warn.push(format!("Skipped route \"{name}\": unknown source \"{}\"", r.source));
             continue;
         }
+        // Modulate follows a level; triggered actions need hits (strobe and twinkle take either).
+        let level = matches!(r.source.as_str(), "energy" | "level" | "phase") || r.source.ends_with(".level");
+        let wants = match &r.action {
+            RouteAction::Modulate { .. } => Some(true),
+            RouteAction::Strobe { .. } | RouteAction::Twinkle { .. } => None,
+            _ => Some(false),
+        };
+        if let Some(want_level) = wants {
+            if want_level != level {
+                warn.push(format!(
+                    "Skipped route \"{name}\": it needs a {} source, not \"{}\"",
+                    if want_level { "level" } else { "hit" },
+                    r.source
+                ));
+                continue;
+            }
+        }
         let before = r.fixtures.len() + r.groups.len() + r.rooms.len();
         r.fixtures.retain(|f| fixture_ids.contains(f.as_str()));
         r.groups.retain(|g| group_ids.contains(g.as_str()));
@@ -896,7 +913,7 @@ mod tests {
             // every target id is unknown
             route("ghosts", "kick", json!({"groups": ["nope"], "fixtures": ["nobody"]}), "@intensity", json!({"type": "flash", "on": 255, "off": 0, "decay_ms": 100})),
             // unknown look set falls back to any set; focus that doesn't exist is cleared; bad enums fixed
-            route("loose", "kick.level", json!({"groups": ["g-laser"], "focus": "nowhere"}), "", json!({"type": "look", "set": "missing", "tags": [], "mode": "shuffle", "hold_ms": 0, "heads": []})),
+            route("loose", "kick", json!({"groups": ["g-laser"], "focus": "nowhere"}), "", json!({"type": "look", "set": "missing", "tags": [], "mode": "shuffle", "hold_ms": 0, "heads": []})),
             route("bad enums", "beat", json!({"groups": ["g1"]}), "", json!({"type": "wave", "palette": "Sunset", "axis": "diagonal", "beats": 1000, "width": 9, "base": 0})),
         ]});
         let (plan, warn) = sanitize(&show, &raw);
@@ -1118,5 +1135,21 @@ mod tests {
         assert_eq!(*smoothing, 0.5);
         assert_eq!(plan.presets[0].values[0].value, 255);
         assert_eq!(plan.controls[0].trigger.number, 36);
+    }
+
+    #[test]
+    fn routes_need_the_right_kind_of_source() {
+        let show = rig();
+        let raw = json!({"routes": [
+            route("mod on a hit", "vocals", json!({"groups": ["g1"]}), "@intensity", json!({"type": "modulate", "min": 0, "max": 255, "smoothing": 0.5})),
+            route("flash on a level", "kick.level", json!({"groups": ["g1"]}), "@intensity", json!({"type": "flash", "on": 255, "off": 0, "decay_ms": 100})),
+            route("strobe on a level", "energy", json!({"groups": ["g1"]}), "", json!({"type": "strobe", "rate": "2", "hz": 10, "duty": 0.3, "burst_ms": 200, "threshold": 0.7})),
+            route("mod on a level", "vocals.level", json!({"groups": ["g1"]}), "@intensity", json!({"type": "modulate", "min": 0, "max": 255, "smoothing": 0.5})),
+        ]});
+        let (plan, warn) = sanitize(&show, &raw);
+        let names: Vec<&str> = plan.routes.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["strobe on a level", "mod on a level"]);
+        assert!(warn.iter().any(|w| w.contains("mod on a hit") && w.contains("level source")));
+        assert!(warn.iter().any(|w| w.contains("flash on a level") && w.contains("hit source")));
     }
 }

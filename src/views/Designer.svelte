@@ -1,17 +1,18 @@
 <script module lang="ts">
   import type { DesignResult } from "../lib/design";
+  import type { SceneSpec } from "../lib/blocks";
   // Kept across view switches so a design isn't lost when you look at Routes.
   const saved = $state({
-    mode: "" as "" | "template" | "ai",
+    mode: "" as "" | "template" | "builder" | "ai",
+    /** Scenes being composed in the scene builder. */
+    scenes: [] as SceneSpec[],
     template: "club",
-    profile: "",
     fromTemplate: false,
     prompt: "",
     genre: "",
-    scope: { routes: true, presets: true, audio: true, palettes: true, controls: true },
-    controller: "",
-    midiChannel: 0,
-    keyboard: true,
+    scope: { routes: true, presets: true, audio: true, palettes: true },
+    /** Show "map your controller next" after a design with scenes was added. */
+    mapNext: false,
     replace: true,
     result: null as DesignResult | null,
     keep: [] as string[],
@@ -25,9 +26,11 @@
   import { app, toast } from "../lib/store.svelte";
   import { GENRES, applyGenre } from "../lib/genres";
   import { aiCounts, applyPlan, describeRoute, describeTrigger, type DesignRequest, type Plan } from "../lib/design";
-  import { TEMPLATES, buildTemplate } from "../lib/templates";
-  import { BUILTIN_CONTROLLERS, DEFAULT_AUTOMAP, automap } from "../lib/controllers";
-  import type { AiSettings, ControlMapping, ControllerProfile, Show } from "../lib/types";
+  import { TEMPLATES, buildTemplate, templateScenes } from "../lib/templates";
+  import { buildScenes, newBlock } from "../lib/blocks";
+  import SceneBuilder from "../components/SceneBuilder.svelte";
+  import GenreTune from "../components/GenreTune.svelte";
+  import type { AiSettings, ControlMapping, Show } from "../lib/types";
 
   const show = app.show!;
   const s = saved;
@@ -35,22 +38,19 @@
   let error = $state("");
   let configured = $state(true);
   let refine = $state("");
+  let tuneOpen = $state(false);
   let started = $state(0);
   let now = $state(Date.now());
 
-  let userProfiles = $state<ControllerProfile[]>([]);
-  const profiles = $derived([...userProfiles, ...BUILTIN_CONTROLLERS]);
   onMount(() => {
     invoke<AiSettings>("get_ai_settings").then((a) => {
       configured = !!a.base_url && (!!a.api_key || a.auth === "none");
       s.mode ||= configured ? "ai" : "template";
     }).catch(() => (s.mode ||= "template"));
-    invoke<ControllerProfile[]>("get_controller_profiles").then((p) => (userProfiles = p)).catch(() => {});
     const t = setInterval(() => (now = Date.now()), 1000);
     // Dev only: ?autodesign runs the (mocked) generator so screenshots can show a result.
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("autodesign") && !s.result) {
       s.genre = "techno";
-      s.controller = "Akai APC mini mk2";
       s.prompt = IDEAS[0];
       generate(false);
     }
@@ -67,7 +67,7 @@
     "A full night: warm-up, groove, build, drop and breakdown scenes, with pads to switch scenes and a strobe button.",
     "Make the drops hit harder: kick flashes, snare strobes, lasers on peak looks, fog on the first beat of the drop.",
     "Something calm for a lounge: slow colour waves, gentle twinkle, no strobe, lasers only on static looks.",
-    "Map my controller: pads for every scene, faders for master, band sensitivities and laser brightness.",
+    "Two rooms: keep the bar warm and calm all night while the main room follows the scenes.",
   ];
 
   async function generate(previous = false) {
@@ -81,10 +81,11 @@
     const request: DesignRequest = {
       prompt: previous ? refine : s.prompt,
       genre: genre ? { name: genre.name, bpm: genre.bpm, style: genre.style } : null,
-      scope: { ...s.scope },
-      controller: s.controller,
-      midi_channel: s.midiChannel,
-      keyboard: s.keyboard,
+      // MIDI and key mappings are made afterwards in Controller setup, from what's actually in the show.
+      scope: { ...s.scope, controls: false },
+      controller: "",
+      midi_channel: 0,
+      keyboard: false,
       previous: previous && plan ? $state.snapshot(plan) : null,
     };
     try {
@@ -126,17 +127,41 @@
     const plan = buildTemplate(base, s.template, genre);
     if (!plan.routes.length) { error = "Nothing to build: add fixtures with brightness/colour channels, or lasers with saved looks, first."; return; }
     addGenreBands(plan, base);
-    const profile = profiles.find((p) => p.id === s.profile) ?? null;
-    if (profile || s.keyboard) {
-      const opts = { ...DEFAULT_AUTOMAP, groups: false, keys: s.keyboard };
-      plan.controls = automap(base, profile, opts, plan.routes, plan.presets).assigned.map((a) => ({ ...a.control, name: `${a.control.name} (${a.input})` }));
-    }
     try {
       const r = await invoke<DesignResult>("design_check", { show: base, plan });
       show_result(r, true);
     } catch (e) {
       error = String(e);
     }
+  }
+
+  /** Build the scene builder's scenes: no AI, same checks and review. */
+  async function buildFromScenes() {
+    error = "";
+    const base: Show = $state.snapshot(show) as Show;
+    if (genre) applyGenre(base, genre);
+    const scenes = $state.snapshot(s.scenes) as SceneSpec[];
+    const empty = scenes.filter((x) => !x.blocks.length).map((x) => x.name);
+    const { plan, skipped } = buildScenes(base, scenes, { genre, title: `Your scenes${genre ? ` · ${genre.name}` : ""}` });
+    if (!plan.routes.length) { error = "Nothing to build: add blocks your rig can drive to at least one scene."; return; }
+    addGenreBands(plan, base);
+    try {
+      const r = await invoke<DesignResult>("design_check", { show: base, plan });
+      r.warnings = [...skipped.map((x) => `Skipped ${x}`), ...empty.map((x) => `Skipped scene "${x}": no blocks`), ...r.warnings];
+      show_result(r, true);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+  function customise() {
+    s.scenes = templateScenes(s.template, $state.snapshot(show) as Show);
+    s.mode = "builder";
+  }
+  function startFrom(sel: HTMLSelectElement) {
+    const v = sel.value;
+    sel.value = "";
+    if (v === "blank") s.scenes = [{ name: "Scene 1", blocks: [newBlock("colour_hits")] }];
+    else if (v) s.scenes = templateScenes(v, $state.snapshot(show) as Show);
   }
 
   function toggle(id: string) {
@@ -151,22 +176,18 @@
     if (!plan) return;
     s.undo = JSON.stringify($state.snapshot(show));
     const msg = applyPlan(show, $state.snapshot(plan) as typeof plan, keep, s.replace);
+    s.mapNext = plan.presets.some((p) => keep.has(p.id));
     toast(`${msg}. Find them under Routes and Control.`);
   }
   function undo() {
     if (!s.undo || !app.show) return;
     app.show = JSON.parse(s.undo);
     s.undo = "";
+    s.mapNext = false;
     app.epoch++;
     toast("Undid the design");
   }
 
-  function tuneOnly() {
-    if (!genre) return;
-    s.undo = JSON.stringify($state.snapshot(show));
-    const changed = applyGenre(show, genre);
-    toast(`Tuned detection for ${genre.name}: ${changed.join(", ")}`);
-  }
 
   function describeAction(c: ControlMapping): string {
     const a = c.action;
@@ -197,7 +218,8 @@
   <div class="panel col form">
     <h2>Design a show</h2>
     <div class="modes">
-      <button class:on={s.mode === "template"} onclick={() => (s.mode = "template")}>Templates <span class="faint small">no AI</span></button>
+      <button class:on={s.mode === "template"} onclick={() => (s.mode = "template")}>Templates</button>
+      <button class:on={s.mode === "builder"} onclick={() => { s.mode = "builder"; if (!s.scenes.length) s.scenes = [{ name: "Scene 1", blocks: [newBlock("colour_hits")] }]; }}>Build your own</button>
       <button class:on={s.mode === "ai"} onclick={() => (s.mode = "ai")}>AI designer</button>
     </div>
 
@@ -214,9 +236,22 @@
           </label>
         {/each}
       </div>
+    {:else if s.mode === "builder"}
+      <p class="muted small">
+        Put scenes together from building blocks: colour hits, waves, sparkle, strobe, laser looks, fog bursts… Pick what each one drives,
+        what sound triggers it and how fast. Works offline, and you review everything before it's added.
+      </p>
+      <div class="row">
+        <select class="grow" onchange={(e) => startFrom(e.currentTarget)}>
+          <option value="">Start again from…</option>
+          <option value="blank">A blank scene</option>
+          {#each TEMPLATES as t}<option value={t.id}>{t.name} template</option>{/each}
+        </select>
+      </div>
+      <SceneBuilder bind:scenes={s.scenes} />
     {:else}
       <p class="muted small">
-        Describe the night and the AI writes routes, scenes, detection tuning and controller mappings for the rig you've set up:
+        Describe the night and the AI writes routes, scenes, palettes and detection tuning for the rig you've set up:
         your fixtures, groups, rooms, focus points and saved looks. You review everything before it's added.
       </p>
       {#if !configured}
@@ -235,20 +270,19 @@
         <option value="">Any / mixed</option>
         {#each GENRES as g}<option value={g.id}>{g.name} ({g.bpm[0]}–{g.bpm[1]} BPM)</option>{/each}
       </select>
-      {#if genre}<button onclick={tuneOnly} title="Apply this genre's detection tuning now">Tune detection only</button>{/if}
+      {#if genre}<button class:on={tuneOpen} onclick={() => (tuneOpen = !tuneOpen)} title="Preview and apply this genre's detection settings now, without building anything">Tune detection only…</button>{/if}
     </div>
+    {#if genre && tuneOpen}{#key genre.id}<GenreTune genreId={genre.id} picker={false} />{/key}{/if}
     {#if genre}<p class="faint small">{genre.style}</p>{/if}
 
     {#if s.mode === "template"}
-      <label for="d-prof">MIDI controller</label>
-      <select id="d-prof" bind:value={s.profile}>
-        <option value="">None</option>
-        {#each profiles as p}<option value={p.id}>{p.name}{p.builtin ? "" : " (yours)"}</option>{/each}
-      </select>
-      <span class="faint small">Maps the scenes, strobe, fog, master, group brightness and band sensitivity to it. Make your own profile on the Control screen.</span>
-      <label class="inline"><input type="checkbox" bind:checked={s.keyboard} /> Also map keyboard keys (1–9 for scenes, S strobe, F fog)</label>
       <div class="row go">
         <button class="primary" onclick={buildFromTemplate}>Build setup</button>
+        <button onclick={customise} title="Open this template in the scene builder to change its scenes and blocks">Customise…</button>
+      </div>
+    {:else if s.mode === "builder"}
+      <div class="row go sticky">
+        <button class="primary" onclick={buildFromScenes} disabled={!s.scenes.some((x) => x.blocks.length)}>Build scenes</button>
       </div>
     {:else}
       <span class="label">Generate</span>
@@ -257,24 +291,7 @@
         <label><input type="checkbox" bind:checked={s.scope.presets} /> Scene presets</label>
         <label><input type="checkbox" bind:checked={s.scope.audio} /> Audio detection tuning</label>
         <label><input type="checkbox" bind:checked={s.scope.palettes} /> Colour palettes</label>
-        <label><input type="checkbox" bind:checked={s.scope.controls} /> MIDI and key mappings</label>
       </div>
-      {#if s.scope.controls}
-        <div class="row">
-          <div class="col grow">
-            <label for="d-ctl">MIDI controller</label>
-            <input id="d-ctl" bind:value={s.controller} placeholder="e.g. Akai APC mini mk2, Novation Launchpad X, none" />
-          </div>
-          <div class="col">
-            <label for="d-ch">Channel</label>
-            <select id="d-ch" bind:value={s.midiChannel}>
-              <option value={0}>Any</option>
-              {#each Array.from({ length: 16 }, (_, i) => i + 1) as c}<option value={c}>{c}</option>{/each}
-            </select>
-          </div>
-        </div>
-        <label class="inline"><input type="checkbox" bind:checked={s.keyboard} /> Also map keyboard keys</label>
-      {/if}
       <div class="row go">
         <button class="primary" onclick={() => generate(false)} disabled={busy || !configured}>{busy ? "Designing…" : "Generate design"}</button>
         {#if busy}<span class="muted small">{Math.max(0, Math.round((now - started) / 1000))} s · big designs can take a few minutes</span>{/if}
@@ -295,6 +312,12 @@
         <h2 class="grow">{plan.title}</h2>
         {#if s.undo}<button onclick={undo}>Undo apply</button>{/if}
       </div>
+      {#if s.mapNext && s.undo}
+        <div class="next row">
+          <span class="grow small"><b>Next: map your controller.</b> Controller setup assigns these scenes to your pads and keys, plus strobe, fog, master and group faders for whatever your rig has.</span>
+          <button class="primary" onclick={() => { s.mapNext = false; app.view = "control"; }}>Open Controller setup</button>
+        </div>
+      {/if}
       {#if plan.summary}<p class="summary">{plan.summary}</p>{/if}
       {#if s.result?.warnings.length}
         <details class="warnings">
@@ -376,7 +399,7 @@
         <button class="primary" onclick={apply} disabled={!s.keep.length}>Add to show</button>
       </div>
       {#if !s.fromTemplate}<div class="row">
-        <input class="grow" bind:value={refine} placeholder="Refine it: “fewer strobes”, “add a fog button”, “use pads 56–63 for scenes”…"
+        <input class="grow" bind:value={refine} placeholder="Refine it: “fewer strobes”, “laser only on drops”, “slower warm-up”…"
           onkeydown={(e) => e.key === "Enter" && refine.trim() && generate(true)} />
         <button onclick={() => generate(true)} disabled={busy || !refine.trim() || !configured}>{busy ? "Working…" : "Refine"}</button>
       </div>{/if}
@@ -390,7 +413,7 @@
   .label { font-size: 12px; color: var(--muted, #9aa4b8); }
   textarea { resize: vertical; font: inherit; }
   .modes { display: flex; gap: 4px; }
-  .modes button { flex: 1; }
+  .modes button { flex: 1; padding: 4px 6px; }
   .modes button.on { background: var(--accent-bg); border-color: var(--accent); }
   .templates { display: flex; flex-direction: column; gap: 6px; }
   .tpl { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--line-2); border-radius: 8px; margin: 0; cursor: pointer; }
@@ -401,6 +424,7 @@
   .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
   .checks label, .inline { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 13px; }
   .go { margin-top: 10px; }
+  .go.sticky { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0; border-top: 1px solid var(--line); z-index: 2; }
   .note { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
   .result { min-height: 420px; max-height: calc(100vh - 120px); }
   .empty { align-items: center; justify-content: center; gap: 8px; text-align: center; flex: 1; padding: 60px 20px; }
@@ -417,6 +441,7 @@
   .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
   .pal { display: flex; gap: 2px; }
   .pal i { width: 16px; height: 12px; border-radius: 2px; }
+  .next { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-bg); }
   .foot { border-top: 1px solid var(--line-2); padding-top: 8px; }
   @media (max-width: 980px) { .designer { grid-template-columns: 1fr; } }
 </style>

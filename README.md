@@ -28,7 +28,7 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
   - Targets are picked room first, then groups or devices, then channel.
 - **Limits that always apply:** lock values, clamp ranges, hold times and blocked values keep a laser below a low ceiling and away from its built-in auto/sound modes, whatever the routes do.
 - **Live control:** scenes that switch route groups (edited with On / Off / leave per group), MIDI and keyboard mappings with Learn, one-click mapping for known controllers (APC mini, Launchpad, nanoKONTROL2, or your own learned layout), a master brightness fader and blackout.
-- **Show designer:** build a whole setup from your rig with offline templates (club night, party, chill, rig test), or describe the night to the AI designer. Both include genre-tuned detection and controller mappings. Review, untick, then add.
+- **Show designer:** build a whole setup from your rig with offline templates (club night, party, chill, rig test), compose your own scenes from building blocks (colour hits, waves, strobe, laser looks, fog bursts…), or describe the night to the AI designer. Both include genre-tuned detection. Review, untick, add, then map your controller to whatever was built.
 - **Outputs:** Art-Net to any node (e.g. PKnight). Zigbee lights work either through a USB dongle, with LightDeck as the coordinator (no hub or MQTT needed), or through an existing Zigbee2MQTT setup.
 - **Projects:** `.lightdeck` project files, autosave, and export/import of app settings.
 
@@ -87,7 +87,7 @@ Pushing a `v*` tag to GitHub builds macOS, Windows and Linux installers automati
 | [Audio detection](docs/audio.md) | Input and gain, detection bands, tuning hits, BPM |
 | [Routes and effects](docs/routes.md) | Sources, actions, effects, palettes, targets, grouping |
 | [Live control](docs/control.md) | Scenes and presets, MIDI and keyboard mappings, controller setup, master, blackout |
-| [Show designer](docs/designer.md) | Setup templates, the AI designer, genre presets |
+| [Show designer](docs/designer.md) | Setup templates, the scene builder, the AI designer, genre presets |
 | [Zigbee lights](docs/zigbee.md) | USB dongle coordinator, pairing, Zigbee2MQTT mode, limits |
 | [Projects and settings](docs/projects-and-settings.md) | Project files, autosave, settings export, where data lives |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |

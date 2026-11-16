@@ -25,7 +25,7 @@ export function demoDesign(): DesignResult {
     warnings: ["Laser peak looks: no looks tagged \"peak\" on Laser head P2, it uses P1 only"],
     plan: {
       title: "Techno night",
-      summary: "Four scenes: Warm-up (slow sunset wave, sparkles on the hats), Build (energy lifts brightness, rings pulse out from the dance floor), Drop (kick colour rings, snare strobe, laser peak looks, fog on the first bar) and Breakdown (lights breathe with the vocals).\nOn the APC mini mk2 the bottom row of pads (notes 0–3) selects the scenes, pad 7 is a held strobe, fader 9 (CC 56) is master and faders 1–2 (CC 48–49) set kick and snare sensitivity.",
+      summary: "Four scenes: Warm-up (slow sunset wave, sparkles on the hats), Build (energy lifts brightness, rings pulse out from the dance floor), Drop (kick colour rings, snare strobe, laser peak looks, fog on the first bar) and Breakdown (lights breathe with the vocals). Recall the scene presets to move between them; build up through Build into Drop, and use Breakdown for the quiet parts.",
       sensitivity: 0.5,
       bands: [{ id: "kick", name: "Kick", enabled: true, ranges: [{ lo_hz: 35, hi_hz: 150, weight: 1 }], detect: "transient", level_threshold: 0.6, gain_db: 0, sensitivity: 0.6, min_gap_ms: 190, release: 0.85, color: "#ff5c6c" }],
       palettes: [
@@ -39,17 +39,7 @@ export function demoDesign(): DesignResult {
         { id: "ai-p-demo3", name: "Drop", color: "#ff3355", values: [], routes: scene(["Drop", "Build"]), exclusive: false },
         { id: "ai-p-demo4", name: "Breakdown", color: "#4fd1ff", values: [], routes: scene(["Breakdown"]), exclusive: false },
       ],
-      controls: [
-        ...["ai-p-demo1", "ai-p-demo2", "ai-p-demo3", "ai-p-demo4"].map((p, i) => ({
-          id: `ai-c-demo${i + 1}`, name: ["Warm-up", "Build", "Drop", "Breakdown"][i], enabled: true,
-          trigger: { source: "midi" as const, kind: "note" as const, channel: 0, number: i, key: "", mode: "on" as const },
-          action: { type: "preset" as const, preset: p },
-        })),
-        { id: "ai-c-demo5", name: "Strobe (hold)", enabled: true, trigger: { source: "midi", kind: "note", channel: 0, number: 7, key: "", mode: "momentary" }, action: { type: "routes", routes: ["ai-r-demo6"] } },
-        { id: "ai-c-demo6", name: "Master", enabled: true, trigger: { source: "midi", kind: "cc", channel: 0, number: 56, key: "", mode: "fader" }, action: { type: "master" } },
-        { id: "ai-c-demo7", name: "Kick sensitivity", enabled: true, trigger: { source: "midi", kind: "cc", channel: 0, number: 48, key: "", mode: "fader" }, action: { type: "band_sensitivity", band: "kick" } },
-        { id: "ai-c-demo8", name: "Drop (key)", enabled: true, trigger: { source: "key", kind: "note", channel: 0, number: 0, key: "3", mode: "on" }, action: { type: "preset", preset: "ai-p-demo3" } },
-      ],
+      controls: [],
     },
   };
 }

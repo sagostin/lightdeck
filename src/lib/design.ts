@@ -1,6 +1,7 @@
 // AI show designs: the plan the backend returns (already checked against the rig),
 // and applying the parts the user keeps to the show.
 import type { BandDef, ControlMapping, Palette, Preset, Route, Show } from "./types";
+import { clone as deepClone } from "./clone";
 
 export interface Plan {
   title: string;
@@ -53,7 +54,7 @@ export function applyPlan(show: Show, plan: Plan, keep: Set<string>, replace: bo
     const ids = new Set(show.routes.map((r) => r.id));
     for (const p of show.presets) for (const k of Object.keys(p.routes)) if (!ids.has(k)) delete p.routes[k];
   }
-  const clone = <T>(x: T): T => structuredClone(x);
+  const clone = deepClone;
   const routes = plan.routes.filter((r) => keep.has(r.id));
   // Palettes: chosen ones, plus any a kept route needs.
   const needed = new Set(routes.map((r) => ("palette" in r.action ? r.action.palette : "")));

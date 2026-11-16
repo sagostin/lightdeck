@@ -1,15 +1,18 @@
 # Show designer
 
-The **Design** screen builds a show for the rig you've set up, in one of two ways:
+The **Design** screen builds a show for the rig you've set up, in one of three ways:
 
 - **Templates** (no AI) build ready-made scene layouts from your rig with fixed rules. They work offline and give the same result every time.
+- **Build your own** (no AI) puts scenes together from building blocks you choose.
 - **AI designer** writes a design from your own description.
 
-Both give you a design to review, untick, add and undo in the same way. Everything they add is ordinary routes, scenes and controls that you can edit afterwards, or build by hand instead (see [Live control](control.md#scenes-and-presets)).
+All three give you a design to review, untick, add and undo in the same way. Everything they add is ordinary routes, palettes, scenes and band settings that you can edit afterwards, or build by hand instead: routes on the Routes screen, scenes on the Control screen (see [Live control](control.md#scenes-and-presets)).
+
+The designers build the **lighting**. MIDI and key mappings are a separate step, done afterwards with [Controller setup](control.md#controller-setup) on the Control screen. Controller setup maps what the show actually has, so a rig without a fog machine gets no fog pad, and you can map again any time the scenes or rig change. After you add a design with scenes, the Design screen points you there.
 
 ## Templates
 
-Pick a template, optionally a genre and a MIDI controller, and click **Build setup**.
+Pick a template and optionally a genre, then click **Build setup**.
 
 | Template | Scenes |
 |---|---|
@@ -25,19 +28,50 @@ Templates read the rig:
 - **Fog** gets short bursts on the drop, at most every 45 seconds.
 - **Focus points** make waves and colour hits ripple out from the first focus point.
 - **Genre** tunes detection and picks the palettes. Drum & bass gets a slower strobe, and Ambient removes strobe entirely.
-- **MIDI controller** maps the scenes, strobe, fog, master, group brightness and band sensitivity to the controller (see [Controller setup](control.md#controller-setup)).
 
 The design summary says what would improve the result, for example tagging laser looks or adding a focus point.
 
+Click **Customise…** to open the selected template in the scene builder and change it.
+
+## Build your own
+
+The scene builder puts scenes together from building blocks. Each block becomes one route, and each scene becomes a scene preset that turns its own routes on and the others off.
+
+1. Start from **A blank scene**, or **Start again from…** a template.
+2. Name each scene, and reorder or remove scenes with ↑ ↓ ×.
+3. **+ Add a block…** to a scene, then set:
+   - **what it drives**: all colour fixtures, half A or B (two of your groups, or alternate fixtures), one of your groups, lasers or fog machines;
+   - **what triggers it**: a band's hits, every beat or every bar, or a level (energy, overall level, a band's level) for *Brightness follows*;
+   - **colours**: the genre's calm or hot palette, or any of your palettes;
+   - **which looks** for lasers: any, calm or peak (your best-matching tag), or a specific tag;
+   - **speed**: slow, medium or fast. This sets wave length, fade and decay times, strobe rate, how often lasers change, and fog cooldown.
+4. Click **Build scenes**.
+
+| Block | Drives | What it does |
+|---|---|---|
+| Colour hits | Colour fixtures | Each hit steps to the next palette colour at full brightness; rings out from the focus point |
+| Colour changes | Colour fixtures | Colour moves on each hit (each bar by default) and leaves brightness to other blocks |
+| Wave | Colour fixtures | A band of colour moves across the room with the beat |
+| Sparkle | Colour fixtures | Random fixtures twinkle in palette colours |
+| Flash on hit | Colour fixtures | Brightness jumps on each hit and fades back |
+| Strobe | Colour fixtures | A strobe burst after each hit |
+| Node hop | Colour fixtures | One fixture flashes per hit, hopping to a neighbour |
+| Brightness follows | Colour fixtures | Brightness follows energy, overall level or a band's level |
+| Laser looks | Lasers | Changes to a saved look, picked by tag |
+| Fog burst | Fog | A short burst every few bars, at most one per 30–90 s depending on speed |
+
+Blocks your rig can't drive (lasers without saved looks, no fog machine) are greyed out and skipped. The design lists anything skipped. The same block twice in a scene is named by where it goes ("Flash on hit · half A").
+
+The templates are made of these same blocks, so a template opened with **Customise…** builds exactly the same setup until you change it.
+
 ## AI designer
 
-Describe the night, pick a genre and your MIDI controller, and the AI proposes:
+Describe the night and pick a genre, and the AI proposes:
 
 - **Audio detection tuning:** band sensitivity, timing and extra bands for the music.
 - **Colour palettes** for the mood.
 - **Routes grouped into scenes** (for example Warm-up, Build, Drop, Breakdown). Each scene is a route group, so the Routes screen shows it as one folder you can switch on and off.
 - **Scene presets** that switch between those scenes.
-- **MIDI and keyboard mappings:** pads for scenes, a held strobe, faders for master and band sensitivity, and so on.
 
 Nothing changes until you click **Add to show**. You review the design first and untick anything you don't want.
 
@@ -63,8 +97,7 @@ The better that information is, the better the design. Before generating:
 1. Write what you want in **What do you want?**, or start from one of the suggestions.
 2. Pick a **Genre**. It tunes detection (see below) and tells the AI how that music is usually lit. "Any / mixed" leaves both to your brief.
 3. Choose what to **Generate**.
-4. Under **MIDI controller**, name the model, such as "Akai APC mini mk2" or "Novation Launchpad X". The AI uses the controller's factory note and CC layout and explains the layout in the design summary. Leave it empty to use notes from 36 and CCs from 1. **Also map keyboard keys** adds keys for the main scenes. B is never used, because it's blackout.
-5. Click **Generate design**. Large designs can take a few minutes.
+4. Click **Generate design**. Large designs can take a few minutes.
 
 ## Reviewing and adding
 
@@ -74,7 +107,6 @@ LightDeck checks every reference before showing the design:
 
 - Unknown fixtures, groups and palettes are fixed or removed.
 - Routes that wouldn't reach any fixture, such as a pan route on fixtures without pan, are skipped.
-- Duplicate triggers are dropped.
 
 Anything fixed or skipped is listed under **things were fixed or skipped**.
 
@@ -82,20 +114,19 @@ Anything fixed or skipped is listed under **things were fixed or skipped**.
 
 - Routes, presets and controls are added after your own.
 - Retuned bands replace those bands' settings. Their ids stay the same, so your existing routes keep working.
-- MIDI input is switched on if the design maps MIDI.
 - Only the starting scene's routes are on. Use the scene presets, or your controller, to move between scenes.
 
-**Replace earlier generated designs** first removes routes, presets and controls from previous designs (templates or AI). Your own work is never removed. Generated items have ids starting with `ai-`, so they're kept apart even after you edit them.
+**Replace earlier generated designs** first removes routes and presets from previous designs (templates or AI), and controls earlier versions of the designer made. Your own work is never removed. Generated items have ids starting with `ai-`, so they're kept apart even after you edit them.
 
 **Undo apply** puts the show back as it was before the last **Add to show**.
 
 ## Refining (AI)
 
-Type a change under the design, such as "fewer strobes", "add a fog button" or "use pads 56–63 for scenes", and click **Refine**. The AI revises the current design and keeps the parts you didn't mention. Review it again, then add it.
+Type a change under the design, such as "fewer strobes", "laser only on drops" or "slower warm-up", and click **Refine**. The AI revises the current design and keeps the parts you didn't mention. Review it again, then add it.
 
 ## Genre presets
 
-The genres also work without AI. On the Design screen, **Tune detection only** applies the selected genre's detection settings. On the Audio screen, use **Tune for a genre…** under Global sensitivity.
+The genres also work without AI. On the Design screen, **Tune detection only…** previews and applies the selected genre's detection settings. On the Audio screen, use **Tune for a genre…** under Global sensitivity. Either way you see what changes before anything is applied (see [Tuning for a genre](audio.md#tuning-for-a-genre)).
 
 | Genre | BPM | Detection changes |
 |---|---|---|
@@ -110,7 +141,7 @@ The genres also work without AI. On the Design screen, **Tune detection only** a
 | Rock / live band | 100–170 | Real drums: lower cymbal sensitivity (Hi-hat renamed Cymbals) |
 | Ambient / chill | 60–110 | Low sensitivity overall, slow release |
 
-A genre preset changes only the bands it names, and adds a band only if the show doesn't already have it. Every value stays editable on the [Audio](audio.md) screen.
+Each genre is a complete set: every band it uses with all its settings, created if missing. Your other bands, frequency ranges, gains, names and colours are kept unless you choose otherwise. Every value stays editable on the [Audio](audio.md) screen.
 
 ## Cost and privacy
 

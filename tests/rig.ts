@@ -68,6 +68,10 @@ export function planProblems(show: Show, plan: Plan): string[] {
     else if (type === "look") { if (!t.some((f) => hasLooks(show, f))) p("look route reaches no fixture with looks"); }
     else if (!t.some((f) => channelOk(f, r.channel))) p(`no target has channel ${r.channel}`);
     if (r.every < 1 || r.probability <= 0) p("never fires");
+    // Modulate follows a level; triggered actions need hits (strobe and twinkle take either).
+    const level = ["energy", "level", "phase"].includes(r.source) || r.source.endsWith(".level");
+    if (type === "modulate" && !level) p(`modulate needs a level source, got ${r.source}`);
+    if (["flash", "random", "node_hop", "cycle", "look", "palette", "wave"].includes(type) && level) p(`${type} needs a hit source, got ${r.source}`);
   }
   const routeIds = new Set([...show.routes, ...plan.routes].map((r) => r.id));
   const presetIds = new Set([...show.presets, ...plan.presets].map((x) => x.id));

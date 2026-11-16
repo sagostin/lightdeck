@@ -85,7 +85,9 @@ Recall from the Control screen, from the **Presets** row on **Live**, or from a 
 - **Faders, in order:** master, brightness per fixture group, then each band's sensitivity.
 - **Keys** (optional): 1–9 and 0 for the first ten scenes, S for strobe, F for fog.
 
-Untick anything you don't want. **Preview** lists which pad or fader gets what and anything that didn't fit. Pads and keys your own controls already use are skipped. **Map controller** replaces only controls from an earlier auto-map, never your own, so run it again whenever you add scenes or fixtures. **Undo** puts the previous controls back.
+It only maps what exists: strobe needs a strobe route, fog needs a fixture with a fog channel, and group faders need groups with a brightness channel. Untick anything you don't want. **Preview** lists which pad or fader gets what and anything that didn't fit. Pads and keys your own controls already use are skipped. **Map controller** replaces only controls from an earlier auto-map, never your own, so run it again whenever you add scenes or fixtures. **Undo** puts the previous controls back.
+
+If you add or remove scenes, strobe routes, fog machines, groups or bands after mapping, the panel says the mapping is out of date, or that some mapped controls point at things that were removed. Click **Map controller** again to bring it up to date.
 
 Built-in layouts:
 

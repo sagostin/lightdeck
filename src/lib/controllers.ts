@@ -3,6 +3,7 @@
 // strobe, fog and blackout to pads, and master, group dimmers and band sensitivity to
 // faders, from whatever the show has now. Re-run it after changing scenes or the rig.
 import type { ControlMapping, ControllerInput, ControllerProfile, Preset, Route, Show } from "./types";
+import { clone } from "./clone";
 import { activeFixtures, groupMembers, hasType } from "./rig";
 
 const notes = (nums: number[], label: (i: number) => string): ControllerInput[] => nums.map((number, i) => ({ kind: "note", number, label: label(i) }));
@@ -95,7 +96,7 @@ export function automap(show: Show, profile: ControllerProfile | null, opts: Aut
       assigned.push({
         input: input.label,
         control: {
-          id: `${MAP_PREFIX}${++n}`, name: w.name, enabled: true, action: structuredClone(w.action),
+          id: `${MAP_PREFIX}${++n}`, name: w.name, enabled: true, action: clone(w.action),
           // CC buttons (nanoKONTROL) act as buttons unless the action is a fader.
           trigger: { source: "midi", kind: input.kind, channel: profile!.channel, number: input.number, key: "", mode: w.mode },
         },
@@ -109,7 +110,7 @@ export function automap(show: Show, profile: ControllerProfile | null, opts: Aut
     for (const [w, key] of keyed) {
       if (used.has(trigKey("key", "", 0, key))) continue;
       assigned.push({ input: `Key ${key.toUpperCase()}`, control: {
-        id: `${MAP_PREFIX}k${++n}`, name: w.name, enabled: true, action: structuredClone(w.action),
+        id: `${MAP_PREFIX}k${++n}`, name: w.name, enabled: true, action: clone(w.action),
         trigger: { source: "key", kind: "note", channel: 0, number: 0, key, mode: w.mode === "toggle" ? "toggle" : w.mode },
       } });
     }
@@ -135,4 +136,33 @@ export function learnInput(p: ControllerProfile, ev: { kind: string; number: num
   const list = p[as];
   list.push({ kind: ev.kind, number: ev.number, label: `${as === "pads" ? "Pad" : "Fader"} ${list.length + 1}` });
   return true;
+}
+
+/** Does a control point at something that no longer exists? */
+export function isDead(show: Show, c: ControlMapping): boolean {
+  const a = c.action;
+  switch (a.type) {
+    case "preset": return !show.presets.some((p) => p.id === a.preset);
+    case "routes": return !a.routes.length || a.routes.some((r) => !show.routes.some((x) => x.id === r));
+    case "route_group": return !show.routes.some((r) => r.group.trim() === a.group.trim());
+    case "band_sensitivity": return !show.audio.bands.some((b) => b.id === a.band);
+    case "bands": return a.bands.some((b) => !show.audio.bands.some((x) => x.id === b));
+    case "channel_value": return [...a.target.groups.filter((g) => !show.groups.some((x) => x.id === g)), ...a.target.fixtures.filter((f) => !show.fixtures.some((x) => x.id === f))].length > 0;
+    default: return false;
+  }
+}
+
+/**
+ * Compare the current auto-mapping with what mapping now would give: `changed` when scenes,
+ * strobe/fog, groups or bands were added or removed since (ignoring which pad each is on).
+ */
+export function mappingStatus(show: Show, preview: AutomapResult) {
+  const current = show.controls.filter((c) => c.id.startsWith(MAP_PREFIX));
+  const sig = (c: ControlMapping) => `${c.trigger.source}|${c.name}|${JSON.stringify(c.action)}`;
+  const a = current.map(sig).sort(), b = preview.assigned.map((x) => sig(x.control)).sort();
+  return {
+    mapped: current.length,
+    dead: current.filter((c) => isDead(show, c)).length,
+    changed: current.length > 0 && JSON.stringify(a) !== JSON.stringify(b),
+  };
 }

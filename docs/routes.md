@@ -19,6 +19,8 @@ Sources are either **hits** (events) or **levels** (0–1 values that change con
 
 A level source used with a hit-style action fires when the level rises past 60%.
 
+If a route's band is deleted (or removed by a genre preset), the route is switched off and highlighted, with a note at the top of the Routes screen. Pick a new sound in **When** and switch it back on.
+
 ## Targets: rooms, then groups and devices, then channel
 
 1. **In**: *Any room*, or one or more rooms. This scopes the route. (Only shown when the project has more than one room.)

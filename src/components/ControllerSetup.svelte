@@ -3,12 +3,15 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { app, toast, uid } from "../lib/store.svelte";
-  import { BUILTIN_CONTROLLERS, DEFAULT_AUTOMAP, MAP_PREFIX, applyAutomap, automap, learnInput, type AutomapOptions } from "../lib/controllers";
+  import { BUILTIN_CONTROLLERS, DEFAULT_AUTOMAP, applyAutomap, automap, learnInput, mappingStatus, type AutomapOptions } from "../lib/controllers";
   import type { ControllerInput, ControllerProfile } from "../lib/types";
 
   const show = app.show!;
   let mine = $state<ControllerProfile[]>([]);
-  let profileId = $state(BUILTIN_CONTROLLERS[0].id);
+  // Remember the controller you map with, so "changed since the last mapping" compares like with like.
+  const lastKey = "controllerSetup.profile";
+  let profileId = $state((() => { try { return localStorage.getItem(lastKey) ?? BUILTIN_CONTROLLERS[0].id; } catch { return BUILTIN_CONTROLLERS[0].id; } })());
+  $effect(() => { try { localStorage.setItem(lastKey, profileId); } catch { /* private window */ } });
   let opts = $state<AutomapOptions>({ ...DEFAULT_AUTOMAP });
   let editing = $state<ControllerProfile | null>(null);
   let learning = $state<"pads" | "faders" | null>(null);
@@ -21,7 +24,7 @@
   const profiles = $derived([...mine, ...BUILTIN_CONTROLLERS]);
   const profile = $derived(profiles.find((p) => p.id === profileId) ?? null);
   const preview = $derived(automap(show, profile, opts));
-  const mapped = $derived(show.controls.filter((c) => c.id.startsWith(MAP_PREFIX)).length);
+  const status = $derived(mappingStatus(show, preview));
 
   function apply() {
     undo = JSON.stringify($state.snapshot(show.controls));
@@ -95,7 +98,12 @@
 
 <div class="panel col">
   <div class="row"><h2 class="grow">Controller setup</h2></div>
-  <span class="small muted">Map scenes, strobe, fog, blackout, master, group brightness and band sensitivity to a controller in one go. Run it again after changing scenes or the rig. It replaces only earlier auto-mapped controls{mapped ? ` (${mapped} now)` : ""}.</span>
+  <span class="small muted">Map scenes, strobe, fog, blackout, master, group brightness and band sensitivity to a controller in one go. Run it again after changing scenes or the rig. It replaces only earlier auto-mapped controls{status.mapped ? ` (${status.mapped} now)` : ""}, never your own.</span>
+  {#if status.dead}
+    <div class="tag warn stale">{status.dead} mapped control{status.dead === 1 ? " points" : "s point"} at scenes or routes that were removed. Map again to fix.</div>
+  {:else if status.changed}
+    <div class="tag warn stale">Your scenes or rig changed since the last mapping. Map again to include the changes.</div>
+  {/if}
   <div class="row">
     <select class="grow" bind:value={profileId}>
       {#if mine.length}<optgroup label="Your controllers">{#each mine as p}<option value={p.id}>{p.name}</option>{/each}</optgroup>{/if}
@@ -166,6 +174,7 @@
 
 <style>
   .flow { flex-wrap: wrap; }
+  .stale { display: block; padding: 6px 8px; white-space: normal; line-height: 1.35; }
   .editor { gap: 6px; border-top: 1px solid var(--line); padding-top: 6px; }
   .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
   .opts label { display: flex; gap: 4px; align-items: center; margin: 0; }

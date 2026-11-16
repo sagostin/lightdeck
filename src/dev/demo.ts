@@ -95,7 +95,7 @@ export function demoShow(sample: Show): Show {
     ],
     routes: [
       route("r-kick-spread", "Kick colour spread", "Pars", "kick", { type: "palette", palette: "pal-club", mode: "rings", fade_ms: 180, brightness: 1 }, { groups: ["grp-pars"], focus: "focus-floor", falloff: true }),
-      route("r-hat-twinkle", "Hi-hat twinkle", "Pars", "hihat", { type: "twinkle", palette: "pal-ice", amount: 0.35, decay_ms: 220, base: 0.1 }, { groups: ["grp-back"] }),
+      route("r-hat-twinkle", "Hi-hat twinkle", "Pars", "hat", { type: "twinkle", palette: "pal-ice", amount: 0.35, decay_ms: 220, base: 0.1 }, { groups: ["grp-back"] }),
       route("r-bass-wave", "Bass wave", "Pars", "bass", { type: "wave", palette: "pal-sunset", axis: "radial", beats: 4, width: 0.4, base: 0.15 }, { groups: ["grp-front"], focus: "focus-floor" }),
       route("r-snare-strobe", "Snare strobe burst", "Pars", "snare", { type: "strobe", rate: "beat", hz: 12, duty: 0.3, burst_ms: 250, threshold: 0.6 }, { groups: ["grp-pars"], enabled: false }),
       route("r-laser-look", "Kick changes laser look", "Laser", "kick", { type: "look", set: lookSet, include_defaults: true, tags: [], mode: "random", hold_ms: 1200, heads: [] }, { groups: ["grp-laser"], every: 4 }),
@@ -145,7 +145,7 @@ export function startDemoFeed() {
     const levels: Record<string, number> = { bass, kick, snare, vocals, hihat: hat };
     const bands: BandOut[] = show.audio.bands.map((b) => {
       const level = Math.max(0, Math.min(1, levels[b.id] ?? 0.3 + 0.2 * Math.sin(secs * 2 + b.id.length)));
-      const hit = b.id === "kick" ? phase < 0.05 : b.id === "snare" ? beats % 2 === 1 && phase < 0.05 : b.id === "hihat" ? half < 0.08 : false;
+      const hit = b.id === "kick" ? phase < 0.05 : b.id === "snare" ? beats % 2 === 1 && phase < 0.05 : b.id === "hat" ? half < 0.08 : false;
       if (hit) hits[b.id] = (hits[b.id] ?? 0) + 1;
       return { id: b.id, level, flux: level * 0.9, threshold: 0.45, hits: hits[b.id] ?? 0 };
     });

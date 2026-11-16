@@ -5,12 +5,14 @@
   import ChannelSelect from "../components/ChannelSelect.svelte";
   import Meters from "../components/Meters.svelte";
   import { app, uid, modeChannels, profileOf, routeFixtures, fixtureHasChannel, clearManual } from "../lib/store.svelte";
+  import { missingBand } from "../lib/genres";
   import { sourceOptions, isTriggerSource, GROUP_LABEL, EFFECT_ACTIONS, type Route, type RouteAction } from "../lib/types";
   import PaletteSelect from "../components/PaletteSelect.svelte";
   import PaletteEditor from "../components/PaletteEditor.svelte";
 
   const show = app.show!;
   const sources = $derived(sourceOptions(show.audio.bands));
+  const orphans = $derived(show.routes.filter((r) => missingBand(show, r.source)));
 
   const ACTIONS: { type: RouteAction["type"]; label: string; make: () => RouteAction }[] = [
     { type: "flash", label: "Flash", make: () => ({ type: "flash", on: 255, off: 0, decay_ms: 250 }) },
@@ -194,6 +196,12 @@
       <button class="ghost" onclick={() => { for (const [k] of groups) collapsed[k] = true; }}>Collapse all</button>
       <button class="ghost" onclick={() => (collapsed = {})}>Expand all</button>
     </div>
+    {#if orphans.length}
+      <div class="orphans row">
+        <span class="grow small"><b>{orphans.length} route{orphans.length === 1 ? "" : "s"} need{orphans.length === 1 ? "s" : ""} a new sound:</b>
+          {orphans.map((r) => r.name || r.id).join(", ")}. {orphans.length === 1 ? "Its band was" : "Their bands were"} removed or renamed on the Audio screen, so {orphans.length === 1 ? "it" : "they"} never fire{orphans.length === 1 ? "s" : ""}. Pick a sound in <b>When</b>.</span>
+      </div>
+    {/if}
     <datalist id="route-groups">{#each groupNames as g}<option value={g}></option>{/each}</datalist>
     {#each groups as [key, items] (key)}
       {@const on = items.filter((x) => x.r.enabled).length}
@@ -211,7 +219,7 @@
       {#if !collapsed[key]}
     {#each items as { r, i } (r.id)}
       {@const drives = targets(r).length}
-      <div class="panel col route" class:off={!r.enabled}>
+      <div class="panel col route" class:off={!r.enabled} class:orphan={missingBand(show, r.source)}>
         <div class="row">
           <input type="checkbox" bind:checked={r.enabled} title="Enabled" />
           <input class="grow" bind:value={r.name} placeholder="Route name" />
@@ -227,7 +235,7 @@
           <select bind:value={r.source}>
             <optgroup label="Hits">{#each sources.triggers as s}<option value={s.id}>{s.label}</option>{/each}</optgroup>
             <optgroup label="Levels">{#each sources.levels as s}<option value={s.id}>{s.label}</option>{/each}</optgroup>
-            {#if ![...sources.triggers, ...sources.levels].some((s) => s.id === r.source)}<option value={r.source}>{r.source} (missing)</option>{/if}
+            {#if ![...sources.triggers, ...sources.levels].some((s) => s.id === r.source)}<option value={r.source}>{r.source} (band removed: pick another)</option>{/if}
           </select>
           <span class="lbl">→</span>
           <select value={r.action.type} onchange={(e) => setAction(r, (e.target as HTMLSelectElement).value)}>
@@ -386,6 +394,8 @@
 </div>
 
 <style>
+  .orphans { padding: 8px 10px; border: 1px solid var(--warn); border-radius: 8px; background: var(--warn-bg); }
+  .route.orphan { border-color: var(--warn); }
   .wrap { display: flex; gap: 16px; align-items: flex-start; }
   .side { width: 260px; flex-shrink: 0; position: sticky; top: 0; }
   .route.off { opacity: 0.55; }
