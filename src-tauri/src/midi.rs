@@ -1,8 +1,11 @@
 //! MIDI input: watches for controllers, connects to the selected ones (or all),
 //! reconnects on hot-plug, and turns raw messages into `MidiEvent`s.
+//! MIDI output: lights pads on the same controllers (see `feedback`).
 
+use crate::feedback::{self, Led};
 use crate::model::MidiSettings;
-use midir::{MidiInput, MidiInputConnection};
+use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+use std::collections::HashMap;
 use serde::Serialize;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -25,12 +28,23 @@ pub struct MidiStatus {
     pub enabled: bool,
     pub available: Vec<String>,
     pub connected: Vec<String>,
+    /// Ports pads are lit on, with the style used.
+    pub feedback: Vec<(String, String)>,
     pub error: Option<String>,
+}
+
+/// An output to a controller, with what its pads show now.
+struct Output {
+    name: String,
+    style: &'static str,
+    conn: MidiOutputConnection,
+    sent: HashMap<(bool, u8, u8), Vec<u8>>,
 }
 
 pub struct Midi {
     settings: Mutex<MidiSettings>,
     status: Mutex<MidiStatus>,
+    outputs: Mutex<Vec<Output>>,
 }
 
 /// Parse one MIDI message. Running status isn't used by midir callbacks (each call is one message).
@@ -49,7 +63,7 @@ pub fn parse(port: &str, msg: &[u8]) -> Option<MidiEvent> {
 
 impl Midi {
     pub fn start(settings: MidiSettings, tx: Sender<MidiEvent>) -> Arc<Self> {
-        let m = Arc::new(Self { settings: Mutex::new(settings), status: Mutex::new(MidiStatus::default()) });
+        let m = Arc::new(Self { settings: Mutex::new(settings), status: Mutex::new(MidiStatus::default()), outputs: Mutex::new(vec![]) });
         let me = m.clone();
         std::thread::Builder::new().name("midi".into()).spawn(move || me.run(tx)).unwrap();
         m
@@ -61,6 +75,54 @@ impl Midi {
 
     pub fn status(&self) -> MidiStatus {
         self.status.lock().unwrap().clone()
+    }
+
+    /// Light pads: send what changed since last time to every feedback output. Pads that
+    /// no longer have a control are switched off.
+    pub fn send_leds(&self, leds: &[Led]) {
+        let mut outs = self.outputs.lock().unwrap();
+        for o in outs.iter_mut() {
+            let mut want: HashMap<(bool, u8, u8), Vec<u8>> = leds.iter().map(|l| (l.key(), feedback::encode(o.style, l))).collect();
+            for (k, msg) in &o.sent {
+                if !want.contains_key(k) {
+                    let off = Led { kind: if k.0 { "cc" } else { "note" }.into(), channel: k.1, number: k.2, lit: false, color: [0, 0, 0] };
+                    let _ = o.conn.send(&feedback::encode(o.style, &off));
+                    let _ = msg;
+                }
+            }
+            o.sent.retain(|k, _| want.contains_key(k));
+            for (k, msg) in want.drain() {
+                if o.sent.get(&k) != Some(&msg) && o.conn.send(&msg).is_ok() {
+                    o.sent.insert(k, msg);
+                }
+            }
+        }
+    }
+
+    /// Connect outputs to the controllers we listen to, when feedback is on.
+    fn connect_outputs(&self, s: &MidiSettings, inputs: &[String]) -> Vec<(String, String)> {
+        let mut outs = self.outputs.lock().unwrap();
+        let style = |name: &str| if s.feedback && s.enabled { feedback::style_for(name, &s.feedback_style) } else { None };
+        let names: Vec<String> = MidiOutput::new("LightDeck")
+            .map(|mo| mo.ports().iter().filter_map(|p| mo.port_name(p).ok()).collect())
+            .unwrap_or_default();
+        // Drop outputs that are gone, no longer listened to, or changed style.
+        outs.retain(|o| names.contains(&o.name) && inputs.contains(&o.name) && style(&o.name) == Some(o.style));
+        for name in inputs.iter().filter(|n| names.contains(n)) {
+            let Some(st) = style(name) else { continue };
+            if outs.iter().any(|o| &o.name == name) {
+                continue;
+            }
+            let Ok(mo) = MidiOutput::new("LightDeck") else { continue };
+            let Some(port) = mo.ports().into_iter().find(|p| mo.port_name(p).ok().as_ref() == Some(name)) else { continue };
+            if let Ok(mut conn) = mo.connect(&port, "lightdeck-out") {
+                for msg in feedback::init_messages(name, st) {
+                    let _ = conn.send(&msg);
+                }
+                outs.push(Output { name: name.clone(), style: st, conn, sent: HashMap::new() });
+            }
+        }
+        outs.iter().map(|o| (o.name.clone(), o.style.to_string())).collect()
     }
 
     fn run(&self, tx: Sender<MidiEvent>) {
@@ -95,11 +157,14 @@ impl Midi {
                     Err(e) => error = Some(format!("{name}: {e}")),
                 }
             }
+            let connected: Vec<String> = conns.iter().map(|(n, _)| n.clone()).collect();
+            let fb = self.connect_outputs(&s, &connected);
             {
                 let mut st = self.status.lock().unwrap();
                 st.enabled = s.enabled;
                 st.available = available;
-                st.connected = conns.iter().map(|(n, _)| n.clone()).collect();
+                st.connected = connected;
+                st.feedback = fb;
                 st.error = error;
             }
             std::thread::sleep(Duration::from_millis(1500));

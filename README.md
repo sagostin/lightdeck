@@ -27,7 +27,8 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
   - Effects: strobe, colour palette, twinkle, wave. These drive each fixture's brightness and colour automatically.
   - Targets are picked room first, then groups or devices, then channel.
 - **Limits that always apply:** lock values, clamp ranges, hold times and blocked values keep a laser below a low ceiling and away from its built-in auto/sound modes, whatever the routes do.
-- **Live control:** scenes that switch route groups (edited with On / Off / leave per group), MIDI and keyboard mappings with Learn, one-click mapping for known controllers (APC mini, Launchpad, nanoKONTROL2, or your own learned layout), a master brightness fader and blackout.
+- **Live control:** scenes that switch route groups (edited with On / Off / leave per group), MIDI and keyboard mappings with Learn, one-click mapping for known controllers (APC mini, Launchpad, nanoKONTROL2, or your own learned layout) with pads lit in each scene's colour, a master brightness fader and blackout.
+- **Autopilot:** hears breakdowns, grooves, builds and drops and switches to the scenes you've tagged for them, bar by bar. Tag scenes by hand, with an offline guess, or with an AI suggestion; pick a scene yourself any time and it follows you.
 - **Show designer:** build a whole setup from your rig with offline templates (club night, party, chill, rig test), compose your own scenes from building blocks (colour hits, waves, strobe, laser looks, fog bursts…), or describe the night to the AI designer. Both include genre-tuned detection. Review, untick, add, then map your controller to whatever was built.
 - **Outputs:** Art-Net to any node (e.g. PKnight). Zigbee lights work either through a USB dongle, with LightDeck as the coordinator (no hub or MQTT needed), or through an existing Zigbee2MQTT setup.
 - **Projects:** `.lightdeck` project files, autosave, and export/import of app settings.
@@ -36,7 +37,7 @@ See the full [feature list](docs/features.md).
 
 ### Coming next
 
-Planned work includes pixel bars and LED strips with per-cell effects, a starter pack of common fixture types (generic RGB/RGBW pars, LED bars, dimmers, moving heads), Open Fixture Library import, MIDI pad feedback, moving heads that follow the room plan, sACN and USB DMX output, and an autopilot that switches scenes on builds and drops. See the [roadmap](docs/roadmap.md).
+Planned work includes pixel bars and LED strips with per-cell effects, a starter pack of common fixture types (generic RGB/RGBW pars, LED bars, dimmers, moving heads), Open Fixture Library import, moving heads that follow the room plan, and sACN and USB DMX output. See the [roadmap](docs/roadmap.md).
 
 ## Screenshots
 
@@ -93,14 +94,14 @@ Pushing a `v*` tag to GitHub builds macOS, Windows and Linux installers automati
 | [Rooms, patch and groups](docs/rooms-and-patch.md) | Drawing rooms, patching fixtures, limits, fixture groups, Art-Net outputs |
 | [Audio detection](docs/audio.md) | Input and gain, detection bands, tuning hits, BPM |
 | [Routes and effects](docs/routes.md) | Sources, actions, effects, palettes, targets, grouping |
-| [Live control](docs/control.md) | Scenes and presets, MIDI and keyboard mappings, controller setup, master, blackout |
+| [Live control](docs/control.md) | Scenes and presets, MIDI and keyboard mappings, pad lights, the autopilot, controller setup, master, blackout |
 | [Show designer](docs/designer.md) | Setup templates, the scene builder, the AI designer, genre presets |
 | [Zigbee lights](docs/zigbee.md) | USB dongle coordinator, pairing, Zigbee2MQTT mode, limits |
 | [Projects and settings](docs/projects-and-settings.md) | Project files, autosave, settings export, where data lives |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and fixes |
 | [Building and releasing](docs/releasing.md) | Local release builds, GitHub Actions CI and releases, versioning, signing |
 | [Architecture](docs/architecture.md) | For developers: code layout, engine, data model, helper protocol, tests |
-| [Roadmap](docs/roadmap.md) | Planned and possible features: pixel bars, fixture packs, moving heads, more outputs, autopilot |
+| [Roadmap](docs/roadmap.md) | Planned and possible features: pixel bars, fixture packs, moving heads, more outputs |
 
 ## Keyboard shortcuts
 

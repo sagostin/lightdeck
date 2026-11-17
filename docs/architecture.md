@@ -42,7 +42,9 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src-tauri/src/engine.rs` | The frame loop, routes, effects, limits, target resolution |
 | `src-tauri/src/audio.rs` | Input via `cpal`, FFT bands, onset and level detection, BPM and beat clock |
 | `src-tauri/src/control.rs` | MIDI/key/button → actions, presets, master |
-| `src-tauri/src/midi.rs` | MIDI input via `midir`, hot-plug, message parsing |
+| `src-tauri/src/midi.rs` | MIDI input and feedback output via `midir`, hot-plug, message parsing |
+| `src-tauri/src/feedback.rs` | Pad-light styles per controller: palette mapping, message encoding, Launchpad Programmer mode |
+| `src-tauri/src/autopilot.rs` | Section detection per bar and scene switching |
 | `src-tauri/src/zigbee.rs` | USB-helper and MQTT backends, paced sender, value → light-state mapping, built-in Zigbee profiles |
 | `src-tauri/src/artnet.rs` | ArtDmx packets |
 | `src-tauri/src/qxf.rs` | QLC+ importer |
@@ -113,7 +115,11 @@ The network keys are generated once into `zigbee/network.json` in the app data f
 
 ## MIDI and controls
 
-`midi.rs` polls ports every 1.5 s, connects to wanted inputs and forwards parsed note, CC and program events. `control.rs` receives those, keyboard events (`control_key`) and on-screen tests (`control_fire`) on one channel, matches `ControlMapping`s, applies actions, and emits `control_state` (route and band states, blackout, master, manual values, active presets) and `midi` (for the monitor and Learn).
+`midi.rs` polls ports every 1.5 s, connects to wanted inputs and forwards parsed note, CC and program events. `control.rs` receives those, keyboard events (`control_key`) and on-screen tests (`control_fire`) on one channel, matches `ControlMapping`s, applies actions, and emits `control_state` (route and band states, blackout, master, manual values, active presets, autopilot) and `midi` (for the monitor and Learn).
+
+**Feedback.** When `MidiSettings.feedback` is on, `midi.rs` also opens the output port with the same name as each connected input, choosing a style with `feedback::style_for` (from the port name, or `feedback_style`). A `midi-feedback` thread asks `Controls::leds()` ten times a second which MIDI-mapped pads are lit and in what colour, and `Midi::send_leds` sends only what changed per port, switching off pads whose control was removed. `leds()` takes the control locks before the show lock, the same order `apply_preset` uses.
+
+**Autopilot.** `autopilot.rs` runs its own thread at 50 Hz on the audio `Features`. Each time `beats / 4` changes it closes a bar (mean overall level, hits of the first band) and gives it to `Pilot::on_bar`. The `Detector` places the bar between the 10th and 90th percentile of the last 64 bars, looks at the 2-bar vs previous-4-bar trend and at kick presence, and confirms a new section after two bars (a drop at once). The pilot picks among scenes whose `Preset.sections` include the section (with fallbacks), respecting `AutopilotSettings` (min, drop and max bars), and sends `Input::Autopilot` to the controls thread, which applies the preset only while the autopilot is on. A scene recalled by hand calls `Autopilot::manual_scene`, which follows it and pauses for `pause_s`. Status goes to the UI as the `autopilot` event every bar. `designer::suggest_autopilot` asks the AI for sections and settings and `check_autopilot` validates the reply.
 
 ## Commands
 

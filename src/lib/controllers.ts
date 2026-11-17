@@ -45,9 +45,9 @@ export const BUILTIN_CONTROLLERS: ControllerProfile[] = [
 
 export interface AutomapOptions {
   scenes: boolean; groups: boolean; strobe: boolean; fog: boolean; blackout: boolean;
-  master: boolean; dimmers: boolean; bands: boolean; keys: boolean;
+  master: boolean; dimmers: boolean; bands: boolean; keys: boolean; autopilot: boolean;
 }
-export const DEFAULT_AUTOMAP: AutomapOptions = { scenes: true, groups: true, strobe: true, fog: true, blackout: true, master: true, dimmers: true, bands: true, keys: true };
+export const DEFAULT_AUTOMAP: AutomapOptions = { scenes: true, groups: true, strobe: true, fog: true, blackout: true, master: true, dimmers: true, bands: true, keys: true, autopilot: true };
 
 /** Auto-mapped controls have ids starting with this, so re-mapping replaces only them. */
 export const MAP_PREFIX = "map-";
@@ -73,6 +73,7 @@ export function automap(show: Show, profile: ControllerProfile | null, opts: Aut
   if (opts.strobe && strobes.length) pads.push({ name: "Strobe (hold)", mode: "momentary", action: { type: "routes", routes: strobes }, key: "s" });
   const foggers = activeFixtures(show).filter((f) => hasType(show, f, "fog")).map((f) => f.id);
   if (opts.fog && foggers.length) pads.push({ name: "Fog (hold)", mode: "momentary", action: { type: "channel_value", target: { rooms: [], groups: [], fixtures: foggers }, channel: "@fog", min: 0, max: 255 }, key: "f" });
+  if (opts.autopilot && presets.some((p) => p.sections?.length)) pads.push({ name: "Autopilot on/off", mode: "toggle", action: { type: "autopilot" }, key: "a" });
   if (opts.blackout) pads.push({ name: "Blackout", mode: "toggle", action: { type: "blackout" } });
   if (opts.blackout) pads.push({ name: "Release manual", mode: "on", action: { type: "release_manual" } });
   if (opts.master) faders.push({ name: "Master", mode: "fader", action: { type: "master" } });

@@ -36,7 +36,7 @@ export function installMocks(demo = false) {
       case "list_audio_devices": return ["Mock input"];
       case "get_band_presets": return [];
       case "zigbee_status": return { enabled: false, mode: "usb", connected: false, bridge_online: null, error: null, state: "Off", coordinator: null, permit_join_until: 0, devices: [], sent_per_sec: 0, backlog: 0, last_send_error: null, log: [] };
-      case "midi_status": return { enabled: false, available: [], connected: [], error: null };
+      case "midi_status": return { enabled: true, available: demo ? ["APC mini mk2 Control"] : [], connected: demo ? ["APC mini mk2 Control"] : [], feedback: demo ? [["APC mini mk2 Control", "apc_mini_mk2"]] : [], error: null };
       case "get_fixture_library": return library;
       case "save_fixture_library": library = a.library as unknown[]; return null;
       case "fixture_export": return null;
@@ -51,6 +51,18 @@ export function installMocks(demo = false) {
         return demo ? new Promise((r) => setTimeout(() => r(demoDesign()), 1200)) : Promise.reject("AI isn't available in the browser preview (try ?demo)");
       case "get_ai_settings": return { schema: "anthropic", base_url: "https://api.anthropic.com", api_key: demo ? "demo" : "", model: "claude-opus-5-5", auth: "x-api-key", extra_headers: {}, max_tokens: 16000 };
       case "zigbee_profiles": return [];
+      case "autopilot_status": return null; // the demo feed fills it in
+      case "autopilot_set": return null;
+      case "autopilot_resume": return null;
+      case "ai_autopilot":
+        return demo
+          ? new Promise((r) => setTimeout(() => r({
+            sections: { "pre-chill": ["breakdown"], "pre-peak": ["build", "drop"] },
+            settings: { min_bars: 8, max_bars: 32, drop_bars: 1, pause_s: 45 },
+            notes: "Chill carries the breakdowns; Peak time takes builds and drops, cutting in on the first bar of a drop.",
+            warnings: ["No scene for: groove (the autopilot falls back to the nearest section)"],
+          }), 900))
+          : Promise.reject("AI isn't available in the browser preview (try ?demo)");
       case "plugin:event|listen": return Math.floor(Math.random() * 1e6);
       default: return null;
     }

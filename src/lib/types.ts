@@ -98,7 +98,17 @@ export interface Show {
   version: number; profiles: Profile[]; fixtures: Fixture[]; rooms: Room[]; outputs: ArtNetOutput[];
   routes: Route[]; audio: AudioSettings; zigbee: ZigbeeSettings; groups: FixtureGroup[];
   presets: Preset[]; palettes: Palette[]; controls: ControlMapping[]; midi: MidiSettings; active_room: string | null;
+  autopilot?: AutopilotSettings;
 }
+/** Parts of a track the autopilot tells apart. */
+export type Section = "breakdown" | "groove" | "build" | "drop";
+export interface AutopilotSettings { min_bars: number; max_bars: number; drop_bars: number; pause_s: number }
+export interface AutopilotStatus {
+  running: boolean; section: Section; history: Section[]; scene: string | null; bars_in_scene: number;
+  paused_s: number; reason: string; scenes: number; loudness: number;
+}
+/** An autopilot set-up suggested by the AI, checked against the show. */
+export interface AutopilotPlan { sections: Record<string, Section[]>; settings: AutopilotSettings; notes: string; warnings: string[] }
 export interface Features {
   running: boolean; device: string; sample_rate: number; error: string | null;
   level: number; energy: number; bands: BandOut[];
@@ -172,8 +182,24 @@ export interface Target { rooms: string[]; groups: string[]; fixtures: string[] 
 export interface PresetValue { fixture: string; channel: string; value: number }
 export interface Preset {
   id: string; name: string; color: string; values: PresetValue[]; routes: Record<string, boolean>; exclusive: boolean;
+  /** Parts of a track the autopilot may use this scene for. */
+  sections?: Section[];
 }
-export interface MidiSettings { enabled: boolean; inputs: string[] }
+export interface MidiSettings {
+  enabled: boolean; inputs: string[];
+  /** Light up controller pads to show what's on. */
+  feedback: boolean;
+  /** "" = from the port name, "off", or a style from FEEDBACK_STYLES. */
+  feedback_style: string;
+}
+export const FEEDBACK_STYLES: [string, string][] = [
+  ["", "Automatic (from the controller's name)"],
+  ["generic", "On/off (velocity or CC 127)"],
+  ["apc_mini_mk2", "Akai APC mini mk2 (RGB)"],
+  ["apc_mini", "Akai APC mini (green/red/yellow)"],
+  ["launchpad", "Novation Launchpad (RGB palette)"],
+  ["nanokontrol2", "Korg nanoKONTROL2 (LED mode External)"],
+];
 export interface ControlTrigger {
   source: "midi" | "key"; kind: "note" | "cc" | "program"; channel: number; number: number; key: string;
   mode: "toggle" | "momentary" | "on" | "off" | "fader";
@@ -187,13 +213,18 @@ export type ControlAction =
   | { type: "preset"; preset: string }
   | { type: "release_manual" }
   | { type: "channel_value"; target: Target; channel: string; min: number; max: number }
-  | { type: "band_sensitivity"; band: string };
-export interface ControlMapping { id: string; name: string; enabled: boolean; trigger: ControlTrigger; action: ControlAction }
+  | { type: "band_sensitivity"; band: string }
+  | { type: "autopilot" };
+export interface ControlMapping {
+  id: string; name: string; enabled: boolean; trigger: ControlTrigger; action: ControlAction;
+  /** Pad colour for MIDI feedback; "" or missing = a colour for the action. */
+  color?: string;
+}
 export interface MidiEvent { port: string; kind: "note" | "cc" | "program"; channel: number; number: number; value: number }
-export interface MidiStatus { enabled: boolean; available: string[]; connected: string[]; error: string | null }
+export interface MidiStatus { enabled: boolean; available: string[]; connected: string[]; feedback?: [string, string][]; error: string | null }
 export interface ControlState {
   routes: Record<string, boolean>; bands: Record<string, { enabled: boolean; sensitivity: number }>;
-  blackout: boolean; master: number; manual: Record<string, Record<string, number>>; active_presets: string[]; fired: string | null;
+  blackout: boolean; master: number; manual: Record<string, Record<string, number>>; active_presets: string[]; autopilot?: boolean; fired: string | null;
 }
 
 export interface Palette { id: string; name: string; colors: string[] }

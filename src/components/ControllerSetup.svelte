@@ -153,6 +153,7 @@
       <label><input type="checkbox" bind:checked={opts.strobe} /> Strobe (hold)</label>
       <label><input type="checkbox" bind:checked={opts.fog} /> Fog (hold)</label>
       <label><input type="checkbox" bind:checked={opts.blackout} /> Blackout, release</label>
+      <label><input type="checkbox" bind:checked={opts.autopilot} /> Autopilot on/off</label>
       <label><input type="checkbox" bind:checked={opts.master} /> Master fader</label>
       <label><input type="checkbox" bind:checked={opts.dimmers} /> Group brightness</label>
       <label><input type="checkbox" bind:checked={opts.bands} /> Band sensitivity</label>

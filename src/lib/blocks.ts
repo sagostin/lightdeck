@@ -3,7 +3,8 @@
 // of blocks; the scene builder lets you pick your own. Nothing here needs AI.
 import type { Plan } from "./design";
 import type { Genre } from "./genres";
-import type { Fixture, Palette, Preset, Route, RouteAction, Show } from "./types";
+import type { Fixture, Palette, Preset, Route, RouteAction, Section, Show } from "./types";
+import { guessSections } from "./autopilot";
 import { activeFixtures, canGlow, hasLooks, hasType, lookTags, profileFor } from "./rig";
 
 type Target = Pick<Route, "rooms" | "groups" | "fixtures">;
@@ -106,7 +107,8 @@ export interface BlockUse {
   /** Laser look tag: "" any, "calm"/"peak" (best match in your tags), or a tag. */
   tag?: string;
 }
-export interface SceneSpec { name: string; blocks: BlockUse[] }
+/** A scene to build. `sections` tags it for the autopilot; left out, they're guessed. */
+export interface SceneSpec { name: string; blocks: BlockUse[]; sections?: Section[] }
 
 export function defaultTarget(needs: Needs) {
   return needs === "laser" ? "lasers" : needs === "fog" ? "fog" : "all";
@@ -284,6 +286,10 @@ export function buildScenes(show: Show, scenes: SceneSpec[], opts: BuildOptions)
     id: `t-p${i + 1}`, name: nm, color: colors[i % colors.length], values: [], exclusive: false,
     routes: Object.fromEntries(routes.map((r) => [r.id, r.group === nm])),
   }));
+  for (const p of presets) {
+    const spec = scenes.find((sc) => sc.name === p.name);
+    p.sections = spec?.sections ? [...spec.sections] : guessSections({ ...show, routes }, p).sections;
+  }
   for (const r of routes) r.enabled = r.group === names[0];
 
   const notes = [

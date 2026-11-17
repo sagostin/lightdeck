@@ -1,4 +1,6 @@
 mod ai;
+mod autopilot;
+mod feedback;
 mod designer;
 mod artnet;
 mod audio;
@@ -30,6 +32,7 @@ struct AppState {
     zigbee: Arc<zigbee::Zigbee>,
     midi: Arc<midi::Midi>,
     controls: Arc<control::Controls>,
+    autopilot: Arc<autopilot::Autopilot>,
     control_tx: Mutex<std::sync::mpsc::Sender<control::Input>>,
     dir: PathBuf,
 }
@@ -329,6 +332,21 @@ fn set_master(state: State<AppState>, value: f32) {
 }
 
 #[tauri::command]
+fn autopilot_set(state: State<AppState>, on: bool) {
+    control_send(&state, control::Input::AutopilotSet { on });
+}
+
+#[tauri::command]
+fn autopilot_resume(state: State<AppState>) {
+    state.autopilot.resume();
+}
+
+#[tauri::command]
+fn autopilot_status(state: State<AppState>) -> autopilot::Status {
+    state.autopilot.status(&state.engine.show.read().unwrap())
+}
+
+#[tauri::command]
 fn control_state(state: State<AppState>) -> control::ControlState {
     state.controls.state(None)
 }
@@ -512,6 +530,12 @@ async fn ai_design(state: State<'_, AppState>, show: Show, request: designer::De
 }
 
 #[tauri::command]
+async fn ai_autopilot(state: State<'_, AppState>, show: Show, request: designer::AutopilotRequest) -> Result<designer::AutopilotPlan, String> {
+    let s = state.ai.lock().unwrap().clone();
+    designer::suggest_autopilot(&s, &show, &request).await
+}
+
+#[tauri::command]
 async fn ai_interpret(state: State<'_, AppState>, input: String, instruction: String) -> Result<Profile, String> {
     let s = state.ai.lock().unwrap().clone();
     ai::interpret(&s, &input, &instruction).await
@@ -626,6 +650,7 @@ fn default_show() -> Show {
         controls: vec![],
         midi: MidiSettings::default(),
         active_room: Some("room-main".into()),
+        autopilot: AutopilotSettings::default(),
     }
 }
 
@@ -677,6 +702,7 @@ pub fn run() {
             let show = Arc::new(RwLock::new(show));
             let midi_settings = show.read().unwrap().midi.clone();
             let engine = Engine::start(app.handle().clone(), show, audio.features.clone(), zb.clone());
+            let pilot = autopilot::Autopilot::new();
             let (controls, control_tx) = control::Controls::start(
                 engine.show.clone(),
                 engine.manual.clone(),
@@ -684,7 +710,9 @@ pub fn run() {
                 engine.master.clone(),
                 audio.params.clone(),
                 app.handle().clone(),
+                pilot.clone(),
             );
+            pilot.start(app.handle().clone(), engine.show.clone(), audio.features.clone(), control_tx.clone());
             let (midi_tx, midi_rx) = std::sync::mpsc::channel::<midi::MidiEvent>();
             let fwd = control_tx.clone();
             std::thread::spawn(move || {
@@ -693,6 +721,17 @@ pub fn run() {
                 }
             });
             let midi = midi::Midi::start(midi_settings, midi_tx);
+            // MIDI feedback: light pads to match what's on, ten times a second.
+            {
+                let (midi, controls) = (midi.clone(), controls.clone());
+                std::thread::Builder::new()
+                    .name("midi-feedback".into())
+                    .spawn(move || loop {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        midi.send_leds(&controls.leds());
+                    })
+                    .unwrap();
+            }
             app.manage(AppState {
                 engine,
                 audio,
@@ -701,6 +740,7 @@ pub fn run() {
                 zigbee: zb,
                 midi,
                 controls,
+                autopilot: pilot,
                 control_tx: Mutex::new(control_tx),
                 dir,
             });
@@ -752,7 +792,11 @@ pub fn run() {
             control_fire,
             preset_apply,
             set_master,
-            control_state
+            control_state,
+            autopilot_set,
+            autopilot_resume,
+            autopilot_status,
+            ai_autopilot
         ])
         .run(tauri::generate_context!())
         .expect("error while running LightDeck");

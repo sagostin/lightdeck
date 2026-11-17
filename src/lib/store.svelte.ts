@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ChannelDef, ControlState, Fixture, Frame, MidiEvent, Profile, ProjectInfo, Show } from "./types";
+import type { AutopilotStatus, ChannelDef, ControlState, Fixture, Frame, MidiEvent, Profile, ProjectInfo, Show } from "./types";
 import { mergeInto } from "./library";
 
 export const app = $state({
@@ -24,6 +24,8 @@ export const app = $state({
   midiLog: [] as (MidiEvent & { at: number })[],
   /** A mapping waiting for MIDI/key learn; global key handling pauses meanwhile. */
   learning: null as string | null,
+  /** What the autopilot hears and plays; updated every bar. */
+  autopilot: null as AutopilotStatus | null,
 });
 
 export function isDirty() {
@@ -126,7 +128,9 @@ export async function init() {
   await listen<MidiEvent>("midi", (e) => {
     app.midiLog = [{ ...e.payload, at: Date.now() }, ...app.midiLog].slice(0, 30);
   });
+  await listen<AutopilotStatus>("autopilot", (e) => (app.autopilot = e.payload));
   applyControlState(await invoke<ControlState>("control_state"));
+  app.autopilot = await invoke<AutopilotStatus>("autopilot_status").catch(() => null);
 }
 
 export async function setManual(fixture: string, channel: string, value: number | null) {
@@ -220,6 +224,7 @@ export function applyControlState(cs: ControlState) {
   app.master = cs.master;
   app.manual = cs.manual;
   app.activePresets = cs.active_presets;
+  if (app.autopilot && cs.autopilot !== undefined) app.autopilot.running = cs.autopilot;
   if (cs.fired) app.fired = { id: cs.fired, at: Date.now() };
 }
 

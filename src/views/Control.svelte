@@ -6,9 +6,10 @@
   import ChannelSelect from "../components/ChannelSelect.svelte";
   import SceneEditor from "../components/SceneEditor.svelte";
   import ControllerSetup from "../components/ControllerSetup.svelte";
+  import Autopilot from "../components/Autopilot.svelte";
   import { newScene, sceneSummary } from "../lib/scenes";
   import { app, uid, toast, modeChannels } from "../lib/store.svelte";
-  import type { ControlAction, ControlMapping, MidiStatus, Preset } from "../lib/types";
+  import { FEEDBACK_STYLES, type ControlAction, type ControlMapping, type MidiStatus, type Preset } from "../lib/types";
 
   const show = app.show!;
   let midi = $state<MidiStatus | null>(null);
@@ -30,7 +31,23 @@
     { type: "bands", label: "Mute/unmute detection bands", fader: false, make: () => ({ type: "bands", bands: [] }) },
     { type: "band_sensitivity", label: "Band sensitivity", fader: true, make: () => ({ type: "band_sensitivity", band: show.audio.bands[0]?.id ?? "" }) },
     { type: "release_manual", label: "Release all manual control", fader: false, make: () => ({ type: "release_manual" }) },
+    { type: "autopilot", label: "Autopilot on/off", fader: false, make: () => ({ type: "autopilot" }) },
   ];
+  /** The colour a pad lights in when the control has none of its own (matches control.rs). */
+  function autoColor(m: ControlMapping): string {
+    const a = m.action;
+    switch (a.type) {
+      case "preset": return show.presets.find((p) => p.id === a.preset)?.color ?? "#7c5cff";
+      case "routes": return a.routes.length && a.routes.every((id) => show.routes.find((r) => r.id === id)?.action.type === "strobe") ? "#ffffff" : "#4fb3ff";
+      case "route_group": return "#45d39a";
+      case "bands": return show.audio.bands.find((b) => a.bands.includes(b.id))?.color ?? "#f2b54a";
+      case "blackout": return "#ff0000";
+      case "master": return "#ffffff";
+      case "channel_value": return a.channel === "@fog" ? "#4fd8ff" : "#f2b54a";
+      case "autopilot": return "#7c5cff";
+      default: return "#f2b54a";
+    }
+  }
   const isFader = (m: ControlMapping) => ACTIONS.find((a) => a.type === m.action.type)?.fader ?? false;
   const routeGroups = $derived([...new Set(show.routes.map((r) => r.group.trim()).filter(Boolean))].sort());
   const routeName = (id: string) => {
@@ -108,7 +125,7 @@
     const p: Preset = {
       id: uid("pre"), name: presetName.trim() || `Preset ${show.presets.length + 1}`,
       color: ["#7c5cff", "#45d39a", "#f2b54a", "#ff5c6c", "#4fb3ff", "#ff7ad9"][show.presets.length % 6],
-      values, routes: includeRoutes ? Object.fromEntries(show.routes.map((r) => [r.id, r.enabled])) : {}, exclusive: false,
+      values, routes: includeRoutes ? Object.fromEntries(show.routes.map((r) => [r.id, r.enabled])) : {}, exclusive: false, sections: [],
     };
     show.presets.push(p);
     presetName = "";
@@ -180,6 +197,17 @@
           <span class="small muted">No MIDI controllers found. Plug one in; it's picked up automatically.</span>
         {/if}
         {#if midi?.error}<div class="small err">{midi.error}</div>{/if}
+        <label class="row small" title="Pads show which scenes, routes and switches are on, in their colours">
+          <input type="checkbox" bind:checked={show.midi.feedback} /> Light up pads
+        </label>
+        {#if show.midi.feedback}
+          <select bind:value={show.midi.feedback_style} title="How to light the pads">
+            {#each FEEDBACK_STYLES as [id, name]}<option value={id}>{name}</option>{/each}
+          </select>
+          {#each midi?.feedback ?? [] as [port, style]}
+            <span class="small faint">{port}: {FEEDBACK_STYLES.find(([id]) => id === style)?.[1] ?? style}</span>
+          {/each}
+        {/if}
       {/if}
     </div>
     <ControllerSetup />
@@ -222,6 +250,8 @@
         <span class="small faint">No scenes or presets yet. Start with <b>+ New scene</b>, or build a whole setup on the Design screen.</span>
       {/each}
     </div>
+
+    <Autopilot />
 
     <div class="panel col">
       <div class="row">
@@ -271,6 +301,11 @@
               </select>
             {/if}
             <span class="grow"></span>
+            {#if m.trigger.source === "midi" && show.midi.feedback && m.trigger.mode !== "fader"}
+              <input type="color" value={m.color || autoColor(m)} oninput={(e) => (m.color = (e.target as HTMLInputElement).value)}
+                title="Pad light colour" />
+              {#if m.color}<button class="ghost small" onclick={() => (m.color = "")} title="Use the automatic colour">auto</button>{/if}
+            {/if}
             <ConfirmButton onconfirm={() => show.controls.splice(i, 1)}>Delete</ConfirmButton>
           </div>
 

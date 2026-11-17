@@ -98,6 +98,12 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 - **Controller setup.**
   - One-click mapping for known controllers (Akai APC mini, Novation Launchpad, Korg nanoKONTROL2) or your own learned layouts.
   - It maps only what the show actually has, and tells you when the mapping is out of date.
+- **Pad lights (MIDI feedback).** Pads show which scenes, routes, blackout and autopilot are on, in the scene's or your chosen colour. Full RGB on the APC mini mk2 and Launchpad X / Mini mk3 (switched to Programmer mode automatically), green/red/yellow on the original APC mini, and on/off for the nanoKONTROL2 and other controllers.
+- **Autopilot.** Hears breakdowns, grooves, builds and drops bar by bar and switches to scenes tagged for them:
+  - stays on a scene a minimum number of bars, lets a drop cut in sooner, and rotates scenes for variety;
+  - pauses when you pick a scene yourself;
+  - scenes are tagged by hand, guessed offline from their names and content, or suggested by the AI;
+  - a live view of what it hears and why it switched, and a pad or key to switch it on and off.
 - **Master brightness and blackout.** Always last in the chain. `B` toggles blackout.
 
 ## Show designer ([guide](designer.md))
@@ -109,6 +115,7 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
   - Every plan is checked and repaired before you see it.
   - You can refine it with follow-up instructions.
 - **Review before adding.** Untick anything you don't want, replace earlier generated designs, and undo.
+- **Ready for the autopilot.** Every designer tags its scenes with the sections they suit.
 - **Controller mapping afterwards.** Map a controller to whatever was built.
 
 ## Projects and settings ([guide](projects-and-settings.md))

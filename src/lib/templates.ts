@@ -26,27 +26,27 @@ export function templateScenes(id: string, show: Show): SceneSpec[] {
   switch (id) {
     case "club":
       return [
-        { name: "Warm-up", blocks: [b("wave", "slow", { palette: "calm" }), b("sparkle", "medium", { target: "b", sound: "hat", palette: "hot" }), laser("bar", "calm", "slow")] },
-        { name: "Build", blocks: [b("colour_bar", "medium", { sound: "bar", palette: "hot" }), b("follow", "medium", { sound: "energy" }), laser("kick", "", "medium")] },
-        { name: "Drop", blocks: [b("colour_hits", "fast", { sound: "kick", palette: "hot" }), b("strobe", "medium", { target: "a", sound: "snare" }), laser("kick", "peak", "fast"), fog()] },
-        { name: "Breakdown", blocks: [b("follow", "medium", { sound: "vocals" }), b("wave", "medium", { palette: "calm" }), laser("bar", "calm", "slow")] },
+        { name: "Warm-up", sections: ["breakdown", "groove"], blocks: [b("wave", "slow", { palette: "calm" }), b("sparkle", "medium", { target: "b", sound: "hat", palette: "hot" }), laser("bar", "calm", "slow")] },
+        { name: "Build", sections: ["build"], blocks: [b("colour_bar", "medium", { sound: "bar", palette: "hot" }), b("follow", "medium", { sound: "energy" }), laser("kick", "", "medium")] },
+        { name: "Drop", sections: ["drop"], blocks: [b("colour_hits", "fast", { sound: "kick", palette: "hot" }), b("strobe", "medium", { target: "a", sound: "snare" }), laser("kick", "peak", "fast"), fog()] },
+        { name: "Breakdown", sections: ["breakdown"], blocks: [b("follow", "medium", { sound: "vocals" }), b("wave", "medium", { palette: "calm" }), laser("bar", "calm", "slow")] },
       ];
     case "party":
       return [
-        { name: "Groove", blocks: [b("colour_hits", "medium", { sound: "kick", palette: "hot" }), b("sparkle", "fast", { target: "b", sound: "hat", palette: "Rainbow" }), laser("bar", "", "medium")] },
-        { name: "Peak", blocks: [b("wave", "fast", { palette: "Rainbow" }), b("node_hop", "medium", { target: "a", sound: "kick", palette: "hot" }), b("strobe", "slow", { sound: "snare" }), laser("kick", "peak", "fast"), fog()] },
+        { name: "Groove", sections: ["breakdown", "groove", "build"], blocks: [b("colour_hits", "medium", { sound: "kick", palette: "hot" }), b("sparkle", "fast", { target: "b", sound: "hat", palette: "Rainbow" }), laser("bar", "", "medium")] },
+        { name: "Peak", sections: ["drop"], blocks: [b("wave", "fast", { palette: "Rainbow" }), b("node_hop", "medium", { target: "a", sound: "kick", palette: "hot" }), b("strobe", "slow", { sound: "snare" }), laser("kick", "peak", "fast"), fog()] },
       ];
     case "chill":
       return [
-        { name: "Glow", blocks: [b("wave", "slow", { palette: "calm" }), b("sparkle", "slow", { target: "b", sound: "hat", palette: "hot" }), laser("bar", "calm", "slow")] },
-        { name: "Drift", blocks: [b("colour_bar", "slow", { sound: "bar", palette: "calm" }), b("follow", "slow", { sound: "level" }), laser("bar", "calm", "slow")] },
+        { name: "Glow", sections: ["breakdown"], blocks: [b("wave", "slow", { palette: "calm" }), b("sparkle", "slow", { target: "b", sound: "hat", palette: "hot" }), laser("bar", "calm", "slow")] },
+        { name: "Drift", sections: ["groove", "build", "drop"], blocks: [b("colour_bar", "slow", { sound: "bar", palette: "calm" }), b("follow", "slow", { sound: "level" }), laser("bar", "calm", "slow")] },
       ];
     case "test": {
       const halves = rig.glow.length >= 2 && JSON.stringify(rig.a) !== JSON.stringify(rig.b);
       const flashes = halves
         ? [b("flash", "medium", { target: "a", sound: "kick" }), b("flash", "medium", { target: "b", sound: "kick" })]
         : [b("flash", "medium", { sound: "kick" })];
-      return [{ name: "Test", blocks: [...flashes, b("colour_bar", "fast", { sound: "bar", palette: "hot" }), laser("kick", "", "fast")] }];
+      return [{ name: "Test", sections: [], blocks: [...flashes, b("colour_bar", "fast", { sound: "bar", palette: "hot" }), laser("kick", "", "fast")] }];
     }
   }
   return [];

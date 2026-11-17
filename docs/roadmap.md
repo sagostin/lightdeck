@@ -1,6 +1,6 @@
 # Roadmap
 
-Ideas for where LightDeck goes next, roughly in order of priority. Nothing here is a promise. The order follows how much each item helps a small live rig (a DJ night, a club room, a home setup) compared with how much work it is. For what exists today, see [Features](features.md).
+Ideas for where LightDeck goes next, roughly in order of priority. Done so far from this list: **MIDI feedback** (pad lights) and the **autopilot** (see [Live control](control.md)). Nothing here is a promise. The order follows how much each item helps a small live rig (a DJ night, a club room, a home setup) compared with how much work it is. For what exists today, see [Features](features.md).
 
 Suggestions and pull requests are welcome. Open an issue to discuss bigger items first.
 
@@ -39,9 +39,6 @@ These would ship in the fixture library and could be updated like any other libr
 ### Open Fixture Library import
 Import from the [Open Fixture Library](https://open-fixture-library.org) JSON format. It's a large, community-maintained catalogue with modes, matrices (pixels) and physical data such as beam angle and weight. It complements QLC+ import and the AI interpreter.
 
-### MIDI feedback
-Light up controller pads to match state: routes and scenes on or off, blackout, the active preset, and the beat on one pad. Known controllers (APC mini, Launchpad) get their colours set automatically, and learned profiles can record which note lights which pad.
-
 ### Moving heads that follow the map
 Aiming already knows each fixture's position, facing and tilt. For moving heads this becomes live:
 
@@ -60,13 +57,13 @@ Aiming already knows each fixture's position, facing and tilt. For moving heads 
 ### WLED and pixel controllers
 Drive WLED controllers (DDP or Art-Net) as pixel strips, with segments mapped onto the room plan. This pairs with pixel bars.
 
-### Autopilot: scenes that follow the music
-LightDeck already measures *Energy* (builds and drops) and the beat.
+### Autopilot, next steps
+The [autopilot](control.md#autopilot) is in. Ideas for taking it further:
 
-- **Detect sections:** intro, build, drop, breakdown.
-- **Switch scenes on its own**, with rules like "Drop scene on a drop, Breakdown after 8 bars of low energy, never the same scene twice in a row".
-- **Override at any time.** A manual scene change pauses autopilot for a while.
-- The designer and templates already produce these scene names, so autopilot works out of the box with them.
+- **Per-track memory.** With a setlist or [tempo sync](#tempo-sync), remember which scenes worked for a track.
+- **Learn from you.** Notice which scenes you pick by hand for each section and prefer them.
+- **More sections.** Tell intros and outros apart from breakdowns, and spot a "fake drop" that cuts back to a build.
+- **AI live (optional).** Every few minutes, let the AI review the last sections heard and adjust scene tags or timing for the rest of the set.
 
 ### Setlists and cues
 A list of songs or sets, each with its own genre tuning and scene list, stepped through with a pad or a key. Optionally, a cue stack per song for planned moments: a fog burst, a blinder hit or blackout at a set time or bar.

@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import RoomCanvas from "../components/RoomCanvas.svelte";
   import Meters from "../components/Meters.svelte";
+  import Autopilot from "../components/Autopilot.svelte";
   import { app, modeChannels, capabilityAt, profileOf } from "../lib/store.svelte";
 
   const show = app.show!;
@@ -27,7 +28,7 @@
 
     {#if show.presets.length}
       <div class="panel">
-        <div class="row" style="margin-bottom:8px"><h2>Presets</h2><span class="muted small">recall a saved look</span></div>
+        <div class="row" style="margin-bottom:8px"><h2>Scenes</h2><span class="muted small grow">recall a scene or saved look</span><Autopilot compact /></div>
         <div class="routes">
           {#each show.presets as p (p.id)}
             <button class="preset" class:on={app.activePresets.includes(p.id)} style="--c:{p.color}"

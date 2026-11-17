@@ -54,7 +54,7 @@ const COLORS = ["#7c5cff", "#45d39a", "#f2b54a", "#ff5c6c", "#4fb3ff", "#ff7ad9"
 export function newScene(show: Show, id: string, name?: string): Preset {
   return {
     id, name: name?.trim() || `Scene ${show.presets.length + 1}`, color: COLORS[show.presets.length % COLORS.length],
-    values: [], routes: {}, exclusive: false,
+    values: [], routes: {}, exclusive: false, sections: [],
   };
 }
 

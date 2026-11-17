@@ -1,7 +1,7 @@
 // Development only: a demo show plus a fake audio feed, for README screenshots and
 // trying the UI without hardware. Open http://localhost:1420/?demo (add &view=<screen>).
 import { app } from "../lib/store.svelte";
-import type { BandOut, Fixture, Frame, Profile, Route, RouteAction, Show } from "../lib/types";
+import type { BandOut, Fixture, Frame, Profile, Route, RouteAction, Section, Show } from "../lib/types";
 
 const PAR: Profile = {
   id: "generic-rgbw-par",
@@ -107,16 +107,19 @@ export function demoShow(sample: Show): Show {
       route("r-fog", "Energy bursts fog", "Atmosphere", "energy", { type: "flash", on: 255, off: 0, decay_ms: 2500 }, { fixtures: ["fx-fog"], channel: "fog", cooldown_ms: 45000 }),
     ],
     presets: [
-      { id: "pre-chill", name: "Chill", color: "#4fd1ff", values: [], routes: { "r-snare-strobe": false, "r-kick-spread": false, "r-bass-wave": true }, exclusive: true },
-      { id: "pre-peak", name: "Peak time", color: "#ff5c6c", values: [], routes: { "r-snare-strobe": true, "r-kick-spread": true, "r-hat-twinkle": true }, exclusive: true },
+      { id: "pre-chill", name: "Chill", color: "#4fd1ff", values: [], routes: { "r-snare-strobe": false, "r-kick-spread": false, "r-bass-wave": true }, exclusive: true, sections: ["breakdown", "groove"] },
+      { id: "pre-peak", name: "Peak time", color: "#ff5c6c", values: [], routes: { "r-snare-strobe": true, "r-kick-spread": true, "r-hat-twinkle": true }, exclusive: true, sections: ["build", "drop"] },
     ],
     controls: [
       { id: "c-blackout", name: "Blackout", enabled: true, trigger: { source: "midi", kind: "note", channel: 1, number: 36, key: "", mode: "toggle" }, action: { type: "blackout" } },
       { id: "c-master", name: "Master", enabled: true, trigger: { source: "midi", kind: "cc", channel: 1, number: 7, key: "", mode: "fader" }, action: { type: "master" } },
       { id: "c-strobe", name: "Strobe (hold)", enabled: true, trigger: { source: "key", kind: "note", channel: 1, number: 0, key: "s", mode: "momentary" }, action: { type: "routes", routes: ["r-snare-strobe"] } },
       { id: "c-peak", name: "Peak time", enabled: true, trigger: { source: "midi", kind: "note", channel: 1, number: 40, key: "", mode: "on" }, action: { type: "preset", preset: "pre-peak" } },
+      { id: "c-auto", name: "Autopilot", enabled: true, trigger: { source: "midi", kind: "note", channel: 1, number: 41, key: "", mode: "toggle" }, action: { type: "autopilot" } },
       { id: "c-chill", name: "Chill", enabled: true, trigger: { source: "key", kind: "note", channel: 1, number: 0, key: "c", mode: "on" }, action: { type: "preset", preset: "pre-chill" } },
     ],
+    midi: { enabled: true, inputs: [], feedback: true, feedback_style: "" },
+    autopilot: { min_bars: 8, max_bars: 32, drop_bars: 2, pause_s: 60 },
     zigbee: { ...sample.zigbee, enabled: false, password: "", host: "" },
     active_room: "room-main",
   };
@@ -191,5 +194,30 @@ export function startDemoFeed() {
       send_errors: [],
     };
     app.frame = frame;
+    demoAutopilot(beats, kick);
   }, 40);
+}
+
+// A scripted track for the autopilot panel: 8 bars groove, 4 breakdown, 4 build, 8 drop.
+const SCRIPT: Section[] = [...Array(8).fill("groove"), ...Array(4).fill("breakdown"), ...Array(4).fill("build"), ...Array(8).fill("drop")];
+let lastBar = -1;
+function demoAutopilot(beats: number, kick: number) {
+  const ap = (app.autopilot ??= { running: false, section: "groove", history: [], scene: null, bars_in_scene: 0, paused_s: 0, reason: "", scenes: 0, loudness: 0.5 });
+  const bar = Math.floor(beats / 4);
+  if (bar === lastBar || !app.show) return;
+  lastBar = bar;
+  const section = SCRIPT[bar % SCRIPT.length];
+  ap.section = section;
+  ap.history = [...ap.history, section].slice(-32);
+  ap.loudness = { breakdown: 0.15, groove: 0.5, build: 0.7, drop: 0.95 }[section] * (0.9 + 0.1 * kick);
+  ap.scenes = app.show.presets.filter((p) => p.sections?.length).length;
+  ap.bars_in_scene++;
+  if (!ap.running) return;
+  const fits = app.show.presets.filter((p) => p.sections?.includes(section));
+  if (fits.length && !fits.some((p) => p.id === ap.scene)) {
+    ap.scene = fits[0].id;
+    ap.bars_in_scene = 0;
+    ap.reason = `${section} detected`;
+    app.activePresets = [fits[0].id];
+  }
 }

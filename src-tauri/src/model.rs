@@ -25,6 +25,32 @@ pub struct Show {
     pub controls: Vec<ControlMapping>,
     pub midi: MidiSettings,
     pub active_room: Option<String>,
+    pub autopilot: AutopilotSettings,
+}
+
+// ---------- autopilot ----------
+
+/// The parts of a track the autopilot tells apart.
+pub const SECTIONS: [&str; 4] = ["breakdown", "groove", "build", "drop"];
+
+/// How the autopilot switches scenes. Which scenes it uses is set per scene (`Preset::sections`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AutopilotSettings {
+    /// Stay on a scene at least this many bars (a drop may cut in after `drop_bars`).
+    pub min_bars: u32,
+    /// Move to another scene for the same section after this many bars; 0 = stay.
+    pub max_bars: u32,
+    /// A drop may replace the scene after this many bars, even before `min_bars`.
+    pub drop_bars: u32,
+    /// After you pick a scene yourself, wait this long before switching again.
+    pub pause_s: u32,
+}
+
+impl Default for AutopilotSettings {
+    fn default() -> Self {
+        Self { min_bars: 8, max_bars: 32, drop_bars: 2, pause_s: 60 }
+    }
 }
 
 // ---------- palettes ----------
@@ -74,6 +100,8 @@ pub struct Preset {
     pub routes: std::collections::BTreeMap<String, bool>,
     /// Clear other manual overrides before applying.
     pub exclusive: bool,
+    /// Parts of a track ("breakdown", "groove", "build", "drop") the autopilot uses this scene for.
+    pub sections: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -94,12 +122,22 @@ pub struct Target {
     pub fixtures: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MidiSettings {
     pub enabled: bool,
     /// Input port names to listen to; empty = all.
     pub inputs: Vec<String>,
+    /// Light up controller pads to show what's on.
+    pub feedback: bool,
+    /// LED protocol: "" = work it out from the port name, "off", or a style from `feedback::STYLES`.
+    pub feedback_style: String,
+}
+
+impl Default for MidiSettings {
+    fn default() -> Self {
+        Self { enabled: false, inputs: vec![], feedback: true, feedback_style: String::new() }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -110,6 +148,8 @@ pub struct ControlMapping {
     pub enabled: bool,
     pub trigger: ControlTrigger,
     pub action: ControlAction,
+    /// Pad colour for MIDI feedback, "#rrggbb"; "" = a colour for the action.
+    pub color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -153,6 +193,8 @@ pub enum ControlAction {
     ChannelValue { target: Target, channel: String, min: u8, max: u8 },
     /// Fader: a band's hit sensitivity.
     BandSensitivity { band: String },
+    /// Switch the autopilot on/off.
+    Autopilot {},
 }
 
 impl Default for ControlAction {

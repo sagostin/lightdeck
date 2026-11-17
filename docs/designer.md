@@ -10,6 +10,8 @@ All three give you a design to review, untick, add and undo in the same way. Eve
 
 The designers build the **lighting**. MIDI and key mappings are a separate step, done afterwards with [Controller setup](control.md#controller-setup) on the Control screen. Controller setup maps what the show actually has, so a rig without a fog machine gets no fog pad, and you can map again any time the scenes or rig change. After you add a design with scenes, the Design screen points you there.
 
+Every designer also tags its scenes for the [autopilot](control.md#autopilot) (breakdown, groove, build, drop), so a design can play itself as soon as it's added. Templates use fixed tags (below), the scene builder guesses from each scene's name, and the AI designer tags scenes from what they do.
+
 ## Templates
 
 Pick a template and optionally a genre, then click **Build setup**.
@@ -28,6 +30,8 @@ Templates read the rig:
 - **Fog** gets short bursts on the drop, at most every 45 seconds.
 - **Focus points** make waves and colour hits ripple out from the first focus point.
 - **Genre** tunes detection and picks the palettes. Drum & bass gets a slower strobe, and Ambient removes strobe entirely.
+
+Autopilot tags: Club night's Warm-up plays breakdowns and grooves, Build builds, Drop drops and Breakdown breakdowns. Party's Groove covers everything but drops and Peak takes drops. Chill's Glow plays breakdowns and Drift the rest. Test my rig isn't tagged, so the autopilot never picks it.
 
 The design summary says what would improve the result, for example tagging laser looks or adding a focus point.
 
@@ -114,7 +118,7 @@ Anything fixed or skipped is listed under **things were fixed or skipped**.
 
 - Routes, presets and controls are added after your own.
 - Retuned bands replace those bands' settings. Their ids stay the same, so your existing routes keep working.
-- Only the starting scene's routes are on. Use the scene presets, or your controller, to move between scenes.
+- Only the starting scene's routes are on. Use the scene presets, your controller or the [autopilot](control.md#autopilot) to move between scenes.
 
 **Replace earlier generated designs** first removes routes and presets from previous designs (templates or AI), and controls earlier versions of the designer made. Your own work is never removed. Generated items have ids starting with `ai-`, so they're kept apart even after you edit them.
 

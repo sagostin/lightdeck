@@ -23,7 +23,7 @@ export function show(): Show {
       bands: [band("kick", "Kick", 35, 150, "transient"), band("bass", "Bass", 60, 250, "level"), band("snare", "Snare", 150, 5000, "transient"),
         band("vocals", "Vocals", 300, 3000, "level"), band("hat", "Hi-hat", 6000, 16000, "transient")],
     },
-    midi: { enabled: false, inputs: [] },
+    midi: { enabled: false, inputs: [], feedback: true, feedback_style: "" },
     active_room: null,
   };
 }

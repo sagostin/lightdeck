@@ -5,6 +5,8 @@
 //! emit a "control_state" event so the UI mirrors the change and saves it.
 
 use crate::audio::AudioParams;
+use crate::autopilot::Autopilot;
+use crate::feedback::{parse_hex, Led};
 use crate::engine::{channel_keys, resolve_fixtures};
 use crate::midi::MidiEvent;
 use crate::model::*;
@@ -24,6 +26,10 @@ pub enum Input {
     Fire { mapping: String, pressed: bool, value: Option<f32> },
     Preset { preset: String },
     Master { value: f32 },
+    /// The autopilot picked a scene.
+    Autopilot { preset: String },
+    /// Switch the autopilot on/off from the screen.
+    AutopilotSet { on: bool },
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -40,6 +46,7 @@ pub struct ControlState {
     pub master: f32,
     pub manual: HashMap<String, HashMap<String, u8>>,
     pub active_presets: Vec<String>,
+    pub autopilot: bool,
     /// The mapping that just fired, for on-screen feedback.
     pub fired: Option<String>,
 }
@@ -51,8 +58,11 @@ pub struct Controls {
     pub master: Arc<AtomicU32>,
     pub audio: Arc<AudioParams>,
     pub app: AppHandle,
+    pub autopilot: Arc<Autopilot>,
     toggles: Mutex<HashSet<String>>,
     active_presets: Mutex<HashSet<String>>,
+    /// The scene recalled last, by anyone.
+    last_scene: Mutex<Option<String>>,
 }
 
 impl Controls {
@@ -63,6 +73,7 @@ impl Controls {
         master: Arc<AtomicU32>,
         audio: Arc<AudioParams>,
         app: AppHandle,
+        autopilot: Arc<Autopilot>,
     ) -> (Arc<Self>, Sender<Input>) {
         let c = Arc::new(Self {
             show,
@@ -71,8 +82,10 @@ impl Controls {
             master,
             audio,
             app,
+            autopilot,
             toggles: Mutex::new(HashSet::new()),
             active_presets: Mutex::new(HashSet::new()),
+            last_scene: Mutex::new(None),
         });
         let (tx, rx) = channel::<Input>();
         let me = c.clone();
@@ -119,8 +132,17 @@ impl Controls {
                     fired = Some(m.id.clone());
                 }
             }
-            Input::Preset { preset } => self.apply_preset(&preset, true),
+            Input::Preset { preset } => {
+                self.apply_preset(&preset, true);
+                self.picked_scene(&preset);
+            }
             Input::Master { value } => self.master.store(value.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed),
+            Input::Autopilot { preset } => {
+                if self.autopilot.running() {
+                    self.apply_preset(&preset, true);
+                }
+            }
+            Input::AutopilotSet { on } => self.set_autopilot(on),
         }
         self.emit_state(fired);
     }
@@ -193,6 +215,14 @@ impl Controls {
                 let state = if mode == "on" || mode == "" { pressed.then_some(true) } else { fader_or_button(mode, pressed, value, current) };
                 if let Some(on) = state {
                     self.apply_preset(preset, on);
+                    if on {
+                        self.picked_scene(preset);
+                    }
+                }
+            }
+            ControlAction::Autopilot {} => {
+                if let Some(on) = fader_or_button(mode, pressed, value, self.autopilot.running()) {
+                    self.set_autopilot(on);
                 }
             }
             ControlAction::ReleaseManual {} => {
@@ -234,6 +264,81 @@ impl Controls {
         }
     }
 
+    /// You picked a scene: the autopilot follows it and pauses.
+    fn picked_scene(&self, id: &str) {
+        let pause = self.show.read().unwrap().autopilot.pause_s;
+        self.autopilot.manual_scene(id, pause);
+    }
+
+    fn set_autopilot(&self, on: bool) {
+        let current = self.last_scene.lock().unwrap().clone();
+        self.autopilot.set_running(on, current);
+    }
+
+    /// Is a scene showing? Scenes that switch routes: when every route is as the scene says.
+    /// Scenes of channel values only: while recalled.
+    fn scene_on(show: &Show, p: &Preset, active: &HashSet<String>) -> bool {
+        if p.routes.is_empty() {
+            return active.contains(&p.id);
+        }
+        p.routes.iter().all(|(id, on)| show.routes.iter().find(|r| &r.id == id).map(|r| r.enabled == *on).unwrap_or(true))
+    }
+
+    /// The pads to light for MIDI feedback, one per MIDI trigger.
+    pub fn leds(&self) -> Vec<Led> {
+        // Small locks first, then the show: apply_preset holds them while it waits to write the show.
+        let active = self.active_presets.lock().unwrap().clone();
+        let toggles = self.toggles.lock().unwrap().clone();
+        let any_manual = !self.manual.lock().unwrap().is_empty();
+        let show = self.show.read().unwrap();
+        let blackout = self.blackout.load(Ordering::Relaxed);
+        let master = f32::from_bits(self.master.load(Ordering::Relaxed));
+        let autopilot = self.autopilot.running();
+        let mut out: Vec<Led> = vec![];
+        for m in show.controls.iter().filter(|m| m.enabled && m.trigger.source == "midi" && m.trigger.kind != "program") {
+            // Faders have no light, except on/off actions on CC buttons.
+            if m.trigger.mode == "fader" && matches!(m.action, ControlAction::Master {} | ControlAction::BandSensitivity { .. } | ControlAction::ChannelValue { .. }) {
+                continue;
+            }
+            let (lit, auto) = match &m.action {
+                ControlAction::Preset { preset } => {
+                    let p = show.presets.iter().find(|p| &p.id == preset);
+                    (p.is_some_and(|p| Self::scene_on(&show, p, &active)), p.map(|p| p.color.clone()).unwrap_or_default())
+                }
+                ControlAction::Routes { routes } => {
+                    let rs: Vec<&Route> = show.routes.iter().filter(|r| routes.contains(&r.id)).collect();
+                    let strobe = !rs.is_empty() && rs.iter().all(|r| matches!(r.action, RouteAction::Strobe { .. }));
+                    (rs.iter().any(|r| r.enabled), if strobe { "#ffffff" } else { "#4fb3ff" }.to_string())
+                }
+                ControlAction::RouteGroup { group } => (show.routes.iter().any(|r| &r.group == group && r.enabled), "#45d39a".into()),
+                ControlAction::Bands { bands } => (
+                    show.audio.bands.iter().filter(|b| bands.contains(&b.id)).all(|b| b.enabled),
+                    show.audio.bands.iter().find(|b| bands.contains(&b.id)).map(|b| b.color.clone()).unwrap_or_else(|| "#f2b54a".into()),
+                ),
+                ControlAction::Blackout {} => (blackout, "#ff0000".into()),
+                ControlAction::Master {} => (master > 0.5, "#ffffff".into()),
+                ControlAction::ReleaseManual {} => (any_manual, "#f2b54a".into()),
+                ControlAction::ChannelValue { channel, .. } => {
+                    (toggles.contains(&m.id), if channel == "@fog" { "#4fd8ff" } else { "#f2b54a" }.into())
+                }
+                ControlAction::BandSensitivity { .. } => (false, "#f2b54a".into()),
+                ControlAction::Autopilot {} => (autopilot, "#7c5cff".into()),
+            };
+            let color = parse_hex(if m.color.is_empty() { &auto } else { &m.color });
+            let led = Led { kind: m.trigger.kind.clone(), channel: m.trigger.channel, number: m.trigger.number, lit, color };
+            // Two controls on one pad: lit if either is on.
+            match out.iter_mut().find(|l| l.key() == led.key()) {
+                Some(l) => {
+                    if lit && !l.lit {
+                        *l = led;
+                    }
+                }
+                None => out.push(led),
+            }
+        }
+        out
+    }
+
     fn target_keys(&self, target: &Target, channel: &str) -> Vec<Key> {
         let show = self.show.read().unwrap();
         let profiles: HashMap<&str, &Profile> = show.profiles.iter().map(|p| (p.id.as_str(), p)).collect();
@@ -264,6 +369,7 @@ impl Controls {
                 }
             }
             active.insert(p.id.clone());
+            *self.last_scene.lock().unwrap() = Some(p.id.clone());
         } else {
             for v in &p.values {
                 manual.remove(&(v.fixture.clone(), v.channel.clone()));
@@ -273,11 +379,12 @@ impl Controls {
     }
 
     pub fn state(&self, fired: Option<String>) -> ControlState {
-        let show = self.show.read().unwrap();
         let mut manual: HashMap<String, HashMap<String, u8>> = HashMap::new();
         for ((f, c), v) in self.manual.lock().unwrap().iter() {
             manual.entry(f.clone()).or_default().insert(c.clone(), *v);
         }
+        let active_presets = self.active_presets.lock().unwrap().iter().cloned().collect();
+        let show = self.show.read().unwrap();
         ControlState {
             routes: show.routes.iter().map(|r| (r.id.clone(), r.enabled)).collect(),
             bands: show
@@ -289,7 +396,8 @@ impl Controls {
             blackout: self.blackout.load(Ordering::Relaxed),
             master: f32::from_bits(self.master.load(Ordering::Relaxed)),
             manual,
-            active_presets: self.active_presets.lock().unwrap().iter().cloned().collect(),
+            active_presets,
+            autopilot: self.autopilot.running(),
             fired,
         }
     }

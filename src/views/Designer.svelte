@@ -197,6 +197,7 @@
       case "route_group": return `${c.trigger.mode} scene "${a.group}"`;
       case "bands": return `mute ${a.bands.join(", ")}`;
       case "blackout": return "blackout";
+      case "autopilot": return "autopilot on/off";
       case "master": return "master brightness";
       case "preset": return `scene: ${[...show.presets, ...(plan?.presets ?? [])].find((p) => p.id === a.preset)?.name ?? a.preset}`;
       case "release_manual": return "release manual";

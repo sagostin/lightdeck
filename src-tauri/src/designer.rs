@@ -94,9 +94,9 @@ How LightDeck works
   twinkle {palette, amount, decay_ms, base 0-255}         sparkles; amount = per second (level source) or per hit
   wave {palette, axis:"x"|"y"|"radial"|"angle"|"height", beats, width 0.05..1, base}  moving band of light, beat-synced (use source "beat")
   look {set:"" or look-set id, include_defaults, tags:[...], mode:"random"|"cycle", hold_ms, heads:[...]}  applies saved looks (lasers/patterns) chosen by tags
-- Presets (scenes): {id, name, color "#rrggbb", values:[{fixture, channel, value}], routes:{route_id: true|false}, exclusive}. A preset with routes switches those routes; every generated route NOT listed in a scene preset is switched OFF by it, so list the ones that should be on. Keep "values" empty unless a fixed static look is wanted.
-- Controls: {id, name, enabled, trigger:{source:"midi"|"key", kind:"note"|"cc"|"program", channel 0-16 (0 = any), number 0-127, key (lower-case KeyboardEvent.key for source "key"), mode:"toggle"|"momentary"|"on"|"off"|"fader"}, action}.
-  Control actions (field "type"): routes {routes:[ids]}, route_group {group}, bands {bands:[band ids]} (mute), blackout {}, master {} (fader = master brightness), preset {preset}, release_manual {}, channel_value {target:{rooms,groups,fixtures}, channel, min, max}, band_sensitivity {band} (fader).
+- Presets (scenes): {id, name, color "#rrggbb", values:[{fixture, channel, value}], routes:{route_id: true|false}, exclusive, sections:[...]}. "sections" lists the parts of a track the AUTOPILOT may use the scene for: "breakdown" (quiet, no kick), "groove" (steady main part), "build" (rising tension), "drop" (loudest, full kick). A preset with routes switches those routes; every generated route NOT listed in a scene preset is switched OFF by it, so list the ones that should be on. Keep "values" empty unless a fixed static look is wanted.
+- Controls: {id, name, enabled, color "#rrggbb" or "" (pad light colour on controllers with RGB pads; "" = automatic), trigger:{source:"midi"|"key", kind:"note"|"cc"|"program", channel 0-16 (0 = any), number 0-127, key (lower-case KeyboardEvent.key for source "key"), mode:"toggle"|"momentary"|"on"|"off"|"fader"}, action}.
+  Control actions (field "type"): routes {routes:[ids]}, route_group {group}, bands {bands:[band ids]} (mute), blackout {}, master {} (fader = master brightness), preset {preset}, release_manual {}, channel_value {target:{rooms,groups,fixtures}, channel, min, max}, band_sensitivity {band} (fader), autopilot {} (switch the autopilot on/off).
   Faders/knobs: kind "cc", mode "fader". Pads/buttons: kind "note"; scene presets use mode "on"; momentary effects (strobe, fog blast) use "momentary".
 - Bands: {id (lower-case slug), name, enabled, ranges:[{lo_hz, hi_hz, weight}], detect:"transient"|"level", level_threshold, gain_db, sensitivity 0..1, min_gap_ms, release 0..0.98, color}. Bands are MERGED by id: reuse existing ids to retune them; new ids add bands. Never rename ids existing routes use.
 
@@ -106,6 +106,7 @@ Design rules
 - Make scenes musically distinct: low energy = slow palette fades, waves over many beats, gentle twinkle, no strobe; builds = energy-modulated brightness, faster waves, rising strobe rate; drops = kick-driven flashes/palette steps, strobe on snare or high energy, laser looks; breakdowns = vocals.level modulation, sparse twinkle.
 - New palettes: 2-6 colours, named for the mood. Reuse existing palettes when they fit.
 - Only the routes of the starting scene should have "enabled": true.
+- Tag every scene with "sections" so the autopilot can play the show: cover breakdown, groove, build and drop between them where the brief allows (a scene may cover several). With controls, add one autopilot pad.
 - Give routes, presets and controls short human names. Use simple ids like "r1", "p1", "c1", "pal1"; LightDeck renumbers them.
 - MIDI: if a controller model is named, use its real factory note/CC layout (e.g. pad grid notes, fader CCs) and say which pad/fader does what in "summary". With no controller, use notes from 36 upward and CCs from 1 upward. Don't reuse a trigger that the rig's existing controls already use.
 
@@ -165,6 +166,120 @@ pub async fn design(settings: &AiSettings, show: &Show, req: &DesignRequest) -> 
     restrict(&mut raw, s);
     let (plan, warnings) = sanitize(show, &raw);
     Ok(DesignResult { plan, warnings })
+}
+
+// ---------- autopilot suggestions ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct AutopilotRequest {
+    /// Anything about the night ("long builds, keep the strobe for the big drops").
+    pub prompt: String,
+    pub genre: Option<GenreHint>,
+}
+
+/// Sections per scene and switching settings, checked against the show.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AutopilotPlan {
+    /// Scene id -> sections. Scenes not listed keep theirs.
+    pub sections: BTreeMap<String, Vec<String>>,
+    pub settings: AutopilotSettings,
+    pub notes: String,
+    pub warnings: Vec<String>,
+}
+
+const AUTOPILOT_SYSTEM: &str = r##"You set up the AUTOPILOT of LightDeck, an audio-reactive lighting controller. Once per bar the autopilot decides which part of the track is playing and switches to a scene tagged for it:
+- "breakdown": quiet part, kick gone (intros, outros, breakdowns)
+- "groove": the steady main part with a kick
+- "build": loudness rising towards a drop (risers, snare rolls)
+- "drop": the loudest part with a full kick
+You receive the show's scenes, with the routes each one switches on (name, action, sound source), and a brief. Decide which sections each scene suits from what it does: slow fades, waves and sparse twinkles suit breakdowns; steady palette steps and colour hits suit grooves; energy-following brightness, rising strobe and faster waves suit builds; kick-driven flashes, strobe, laser peak looks and fog suit drops. A scene may suit several sections; leave a scene out of every section (empty list) if it shouldn't play by itself, e.g. a blackout or test scene. Try to cover all four sections.
+Also choose the switching settings:
+- min_bars (1-64): bars to stay on a scene before changing it. Faster music and shorter phrases: lower.
+- max_bars (0-256): change to another scene for the same section after this many bars (0 = never). Usually 16-64.
+- drop_bars (1-min_bars): a drop may replace the scene after this many bars, even before min_bars.
+- pause_s (0-600): after the DJ picks a scene by hand, wait this long before switching again.
+Reply with ONE JSON object, no prose, no code fences:
+{"scenes": [{"id": scene id, "sections": [...]}], "min_bars": n, "max_bars": n, "drop_bars": n, "pause_s": n, "notes": 1-3 sentences on how the autopilot will play this show}"##;
+
+pub fn autopilot_user(show: &Show, req: &AutopilotRequest) -> String {
+    let scenes: Vec<Value> = show
+        .presets
+        .iter()
+        .map(|p| {
+            let on: Vec<Value> = show
+                .routes
+                .iter()
+                .filter(|r| p.routes.get(&r.id) == Some(&true))
+                .map(|r| json!({"name": r.name, "action": serde_json::to_value(&r.action).ok().and_then(|v| v.get("type").cloned()), "source": r.source}))
+                .collect();
+            json!({"id": p.id, "name": p.name, "sections": p.sections, "routes_on": on, "fixed_channel_values": p.values.len()})
+        })
+        .collect();
+    let mut u = format!("SCENES\n{}\n\nCURRENT SETTINGS\n{}\n", serde_json::to_string(&scenes).unwrap_or_default(), serde_json::to_string(&show.autopilot).unwrap_or_default());
+    if let Some(g) = &req.genre {
+        u.push_str(&format!("\nGENRE: {} ({:.0}-{:.0} BPM). {}\n", g.name, g.bpm[0], g.bpm[1], g.style));
+    }
+    if !req.prompt.trim().is_empty() {
+        u.push_str(&format!("\nBRIEF\n{}\n", req.prompt.trim()));
+    }
+    u
+}
+
+/// Check a reply: known scenes only, known sections only, numbers in range.
+pub fn check_autopilot(show: &Show, raw: &Value) -> AutopilotPlan {
+    let mut out = AutopilotPlan { settings: show.autopilot.clone(), ..Default::default() };
+    for v in raw.get("scenes").and_then(|v| v.as_array()).into_iter().flatten() {
+        let id = v.get("id").and_then(|x| x.as_str()).unwrap_or_default();
+        let Some(p) = show.presets.iter().find(|p| p.id == id || p.name == id) else {
+            out.warnings.push(format!("Ignored unknown scene \"{id}\""));
+            continue;
+        };
+        let asked: Vec<String> = v.get("sections").and_then(|x| x.as_array()).into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect();
+        let clean = clean_sections(&asked);
+        if clean.len() < asked.len() {
+            out.warnings.push(format!("{}: ignored unknown sections", p.name));
+        }
+        out.sections.insert(p.id.clone(), clean);
+    }
+    let num = |k: &str| raw.get(k).and_then(|x| x.as_f64()).map(|x| x.round().max(0.0) as u32);
+    let st = &mut out.settings;
+    if let Some(n) = num("min_bars") {
+        st.min_bars = n.clamp(1, 64);
+    }
+    if let Some(n) = num("max_bars") {
+        st.max_bars = n.min(256);
+    }
+    if let Some(n) = num("drop_bars") {
+        st.drop_bars = n;
+    }
+    if let Some(n) = num("pause_s") {
+        st.pause_s = n.min(600);
+    }
+    st.drop_bars = st.drop_bars.clamp(1, st.min_bars);
+    if st.max_bars > 0 && st.max_bars < st.min_bars {
+        st.max_bars = st.min_bars;
+    }
+    out.notes = raw.get("notes").and_then(|x| x.as_str()).unwrap_or_default().to_string();
+    let covered: HashSet<&str> = out.sections.values().flatten().map(|s| s.as_str()).chain(
+        show.presets.iter().filter(|p| !out.sections.contains_key(&p.id)).flat_map(|p| p.sections.iter().map(|s| s.as_str())),
+    ).collect();
+    let missing: Vec<&str> = SECTIONS.iter().copied().filter(|s| !covered.contains(s)).collect();
+    if !missing.is_empty() {
+        out.warnings.push(format!("No scene for: {} (the autopilot falls back to the nearest section)", missing.join(", ")));
+    }
+    out
+}
+
+pub async fn suggest_autopilot(settings: &AiSettings, show: &Show, req: &AutopilotRequest) -> Result<AutopilotPlan, String> {
+    if show.presets.is_empty() {
+        return Err("Make some scenes first: the autopilot switches between scenes".into());
+    }
+    let text = ai::complete_long(settings, AUTOPILOT_SYSTEM, &autopilot_user(show, req)).await?;
+    let raw: Value = ai::extract_json(&text)
+        .and_then(|j| serde_json::from_str(j).ok())
+        .ok_or("The model reply did not contain valid JSON")?;
+    Ok(check_autopilot(show, &raw))
 }
 
 /// Drop the parts of a raw reply that weren't asked for, before checking it, so
@@ -263,6 +378,11 @@ fn new_ids() -> impl FnMut(&str) -> String {
         n += 1;
         format!("ai-{kind}-{tag}{n}")
     }
+}
+
+/// Known sections only, in a fixed order, once each.
+pub fn clean_sections(v: &[String]) -> Vec<String> {
+    SECTIONS.iter().filter(|s| v.iter().any(|x| x.trim().eq_ignore_ascii_case(s))).map(|s| s.to_string()).collect()
 }
 
 fn hex_ok(c: &str) -> bool {
@@ -563,6 +683,7 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
         if !hex_ok(&p.color) {
             p.color = "#7c5cff".into();
         }
+        p.sections = clean_sections(&p.sections);
         let new = id("p");
         preset_map.insert(p.id.clone(), new.clone());
         p.id = new;
@@ -635,8 +756,11 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
                     .any(|f| !channel_keys(&profiles, f, channel).is_empty())
             }
             ControlAction::BandSensitivity { band } => band_ids.contains(band.as_str()),
-            ControlAction::Blackout {} | ControlAction::Master {} | ControlAction::ReleaseManual {} => true,
+            ControlAction::Blackout {} | ControlAction::Master {} | ControlAction::ReleaseManual {} | ControlAction::Autopilot {} => true,
         };
+        if !c.color.is_empty() && !hex_ok(&c.color) {
+            c.color.clear();
+        }
         if !ok {
             warn.push(format!("Skipped control \"{}\": what it controls doesn't exist", c.name));
             continue;
@@ -798,6 +922,7 @@ mod tests {
             ControlAction::ReleaseManual {} => "release_manual",
             ControlAction::ChannelValue { .. } => "channel_value",
             ControlAction::BandSensitivity { .. } => "band_sensitivity",
+            ControlAction::Autopilot {} => "autopilot",
         }
     }
 
@@ -827,6 +952,7 @@ mod tests {
             ControlAction::ReleaseManual {},
             ControlAction::ChannelValue { target: Target::default(), channel: String::new(), min: 0, max: 0 },
             ControlAction::BandSensitivity { band: String::new() },
+            ControlAction::Autopilot {},
         ]
     }
 
@@ -837,6 +963,51 @@ mod tests {
                 || SYSTEM.contains(&format!("{k}}}")) || SYSTEM.contains(&format!("\"{k}\""));
             assert!(mentioned, "{what}: field `{k}` is not described in the designer prompt");
         }
+    }
+
+    #[test]
+    fn autopilot_suggestions_are_checked() {
+        let mut show = Show::default();
+        for (id, name) in [("p1", "Chill"), ("p2", "Drop"), ("p3", "Test")] {
+            show.presets.push(Preset { id: id.into(), name: name.into(), sections: vec!["groove".into()], ..Default::default() });
+        }
+        let raw = json!({
+            "scenes": [{"id": "p1", "sections": ["Breakdown", "groove", "chorus"]}, {"id": "Drop", "sections": ["drop", "build"]}, {"id": "nope", "sections": ["drop"]}],
+            "min_bars": 300, "max_bars": 4, "drop_bars": 99, "pause_s": 30.4, "notes": "Plays itself."
+        });
+        let plan = check_autopilot(&show, &raw);
+        assert_eq!(plan.sections["p1"], ["breakdown", "groove"]);
+        assert_eq!(plan.sections["p2"], ["build", "drop"], "scenes can be named by name; sections in a fixed order");
+        assert!(!plan.sections.contains_key("p3"), "unlisted scenes keep theirs");
+        assert_eq!((plan.settings.min_bars, plan.settings.max_bars, plan.settings.drop_bars, plan.settings.pause_s), (64, 64, 64, 30));
+        assert!(plan.warnings.iter().any(|w| w.contains("nope")));
+        assert!(plan.warnings.iter().any(|w| w.contains("unknown sections")));
+        assert_eq!(plan.notes, "Plays itself.");
+        // missing numbers keep the current settings; uncovered sections are pointed out
+        let plan = check_autopilot(&show, &json!({"scenes": []}));
+        assert_eq!(plan.settings, show.autopilot);
+        assert!(plan.warnings.iter().any(|w| w.contains("breakdown, build, drop")), "{:?}", plan.warnings);
+        let user = autopilot_user(&show, &AutopilotRequest { prompt: "long builds".into(), genre: None });
+        assert!(user.contains("\"Chill\"") && user.contains("long builds"));
+    }
+
+    #[test]
+    fn plans_keep_scene_sections_and_pad_colours() {
+        let show = Show::default();
+        let raw = json!({
+            "presets": [{"id": "p1", "name": "Peak", "values": [], "routes": {}, "sections": ["drop", "party"]}],
+            "controls": [
+                {"id": "c1", "name": "Auto", "color": "#00ff00", "trigger": {"source": "midi", "kind": "note", "number": 40, "mode": "toggle"}, "action": {"type": "autopilot"}},
+                {"id": "c2", "name": "Black", "color": "green", "trigger": {"source": "midi", "kind": "note", "number": 41, "mode": "toggle"}, "action": {"type": "blackout"}}
+            ]
+        });
+        let (plan, _) = sanitize(&show, &raw);
+        assert!(plan.presets.is_empty(), "a scene that changes nothing is still skipped");
+        assert_eq!(plan.controls.len(), 2);
+        assert!(matches!(plan.controls[0].action, ControlAction::Autopilot {}));
+        assert_eq!(plan.controls[0].color, "#00ff00");
+        assert_eq!(plan.controls[1].color, "", "unreadable colours fall back to automatic");
+        assert_eq!(clean_sections(&["DROP".into(), "x".into(), "groove".into(), "drop".into()]), ["groove", "drop"]);
     }
 
     #[test]
@@ -1008,6 +1179,7 @@ mod tests {
             enabled: true,
             trigger: ControlTrigger { number: 36, ..Default::default() },
             action: ControlAction::Blackout {},
+            color: String::new(),
         });
         let raw = json!({"controls": [{"name": "Clash", "trigger": {"source": "midi", "kind": "note", "channel": 0, "number": 36}, "action": {"type": "master"}}]});
         let (plan, warn) = sanitize(&show, &raw);
