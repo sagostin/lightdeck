@@ -24,7 +24,8 @@ const shots = {
   audio: "view=audio",
   rooms: "view=rooms",
   browser: "view=library&tab=browser",
-  design: "view=scenes&autodesign",
+  scenes: "view=scenes",
+  "scenes-add": "view=scenes&autodesign",
   control: "view=control",
 };
 

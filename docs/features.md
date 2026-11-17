@@ -11,8 +11,11 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 - **Tags on values and ranges.** Mark values as *blocked*, *safe*, *peak*, *chill* and so on. Routes and limits use the tags.
 - **Multi-head fixtures.** Fixtures with several projectors (P1/P2 lasers) show, route and store looks for each head separately. Looks map across heads by channel name.
 - **Pattern browser.** Step through a laser's values on the real device with the keyboard. Tag them, rate them and save the ones you like as looks.
+  - While it's open it takes over the preview fixture: routes and the playing scene pause on it, so it shows only what you set, and get it back when you leave.
+  - Catalogued values and looks are one list, with each look nested under the value it's built on. **Update look** saves into a look; on another value, **Save as new** leaves the original as it was.
+  - Ticked secondary channels save the value they show (0 included); unticked ones are left alone. Looks never switch a head's on/off channel on by themselves.
 - **Looks.** A look is a pattern plus secondary options (zoom, rotation, colour…), saved per fixture type. Looks can be grouped into sets (*drop*, *calm*…), and channels in a look can move: sweeps, steps, random values, lists, catalogue picks or follow-the-level, timed by the beat, by seconds or by hits.
-- **Look routes.** Apply saved looks picked by set, tags or name, randomly by rating or in order, *hold at least*, *change after at most*, rests (no look for a while) and the route's every-N / cooldown / chance timing. **Follow the section** picks looks tagged `breakdown`, `groove`, `build` or `drop` for the part of the track playing.
+- **Look routes.** Apply saved looks picked by set, tags or name, randomly by rating or in order, *hold at least*, *change after at most*, rests (no look for a while) and the route's every-N / cooldown / chance timing. **Follow the section** picks looks tagged `breakdown`, `groove`, `build` or `drop` for the part of the track playing. **Plays on** uses the head each look was saved on, one head, or every head. Look pickers group looks by pattern, best rated first.
 - **Fixture library.** Keep fixture types and their looks in an app-wide library. Projects keep their own copy and merge updates both ways, so venue-only looks survive.
 - **`.lightdeck-fixture` files.** Export a fixture type with its looks to share it, then import it into another library or project.
 - **Beam angle per type.** Read from QLC+ lens data, set by hand, or a sensible default for the kind.
@@ -87,7 +90,7 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
   - **Twinkle:** sparkles over a dim base that cluster near a focus point.
   - **Wave:** moves left to right, front to back, out from a focus point, around it, or low to high, in time with the beat.
   - **Fade with distance:** any effect lights an area around a focus point instead of the whole room.
-- **Timing and chance.** Act on every Nth hit, with a cooldown, with a chance, and only in some sections of a track.
+- **Timing and chance.** Act on every Nth hit, with a cooldown, with a chance (as a percentage), and only in some sections of a track (**plays in**). A route that's switched on waits for the next hit rather than firing on a stale one.
 - **Palettes.** Six built-in palettes (Club, Sunset, Ice, Rainbow, Forest, White), plus your own.
 - **Organisation:**
   - route groups, with *All on* / *All off*;
@@ -97,7 +100,7 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 
 ## Live control ([guide](control.md))
 
-- **Scenes.** Switch route groups with *On*, *Off* or *Leave* per group. Presets also hold hand-set channel values.
+- **Presets.** Save hand-set channel values (Patch sliders, pattern browser, channel faders), optionally with route states, and recall them from a pad or key. Scenes are on the [Scenes screen](scenes.md).
 - **MIDI and keyboard mappings** with Learn:
   - **Actions:** route or group on/off, recall a scene or preset, autopilot on/off, hold a section, blackout, master, set a channel (or move it with a fader), mute bands, band sensitivity, release manual control.
   - **Button modes:** toggle, while held, on, off or fader.
@@ -135,4 +138,4 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 
 - **Native desktop app.** Built with Tauri 2: a Rust engine and a Svelte 5 UI.
 - **Installers.** macOS (Apple Silicon and Intel), Windows and Linux, built by GitHub Actions on every `v*` tag.
-- **Tests.** TypeScript tests for the designer, genres, scenes, controllers, templates, blocks, library and aiming. Rust tests for the engine, effects, importer, Zigbee, MIDI and AI designer.
+- **Tests.** TypeScript tests for the designer, genres, scenes, controllers, templates, blocks, library and aiming. Rust tests for the engine, effects, importer, Zigbee, MIDI, pad feedback, autopilot and AI designer.

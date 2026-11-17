@@ -23,8 +23,10 @@ Built with [Tauri 2](https://tauri.app) (Rust engine) and Svelte 5 (UI). Develop
 - **Rooms and layout:** draw rooms to scale, place fixtures with height and direction, aim lights at the floor, ceiling or an angle and see where each beam lands (effects then work from the lit spots), use several rooms per project, and add **focus points** (DJ booth, dance floor) that effects ripple out from, rotate around or fade with distance from.
 - **Audio detection:** configurable bands on a live spectrum (Kick, Bass, Snare, Vocals, Hi-hat by default; add your own). A band can listen to several frequency ranges, and each has its own gain, sensitivity and detection mode. LightDeck also tracks BPM and the beat.
 - **Routes:** connect a sound (a hit or a level) to an action on fixtures.
-  - Channel actions: flash, random value from your catalogue, node hop (nearest neighbour in 3D), modulate, cycle.
+  - Channel actions: flash, random value from your catalogue, node hop (nearest neighbour in 3D), modulate, cycle, move (sweep, step, random, list or follow, with fixtures chasing each other) and saved laser looks.
   - Effects: strobe, colour palette, twinkle, wave. These drive each fixture's brightness and colour automatically.
+  - Any route can also move other channels on its fixtures (a kick flash that sweeps the zoom open), or switch other routes on or off for a number of beats.
+  - Routes can play only in some sections of a track (breakdown, groove, build, drop).
   - Targets are picked room first, then groups or devices, then channel.
 - **Limits that always apply:** lock values, clamp ranges, hold times and blocked values keep a laser below a low ceiling and away from its built-in auto/sound modes, whatever the routes do.
 - **Scenes and the autopilot:** a scene switches the whole rig at once (each group in a saved look, with the routes you want running on top), set up per group or captured from the rig as it is. Make scenes from building blocks (colour hits, waves, strobe, laser looks, fog bursts…), from offline templates (club night, party, chill, rig test) or by describing the night to the AI. LightDeck hears breakdowns, grooves, builds and drops: blocks can play only in some sections or change in them (strobe and peak lasers only in the drop), limits per section cap brightness or stop strobe and fog, and the autopilot switches to the scenes tagged for each section, bar by bar.
@@ -42,9 +44,9 @@ Planned work includes pixel bars and LED strips with per-cell effects, a starter
 
 | | |
 |---|---|
-| [![Routes](docs/images/routes.png)](docs/images/routes.png) **Routes** connect hits and levels to channel actions and effects, grouped and targeted by room, group or device. | [![Audio](docs/images/audio.png)](docs/images/audio.png) **Audio** detection bands drawn on a live spectrum, with an onset trace for tuning hits. |
+| [![Routes](docs/images/routes.png)](docs/images/routes.png) **Routes** connect hits and levels to channel actions and effects, targeted by room, group or device, and can also move other channels or switch other routes. | [![Audio](docs/images/audio.png)](docs/images/audio.png) **Audio** detection bands drawn on a live spectrum, with an onset trace for tuning hits. |
 | [![Rooms](docs/images/rooms.png)](docs/images/rooms.png) **Rooms** drawn to scale, with fixtures, beam directions and focus points. | [![Pattern browser](docs/images/browser.png)](docs/images/browser.png) **Pattern browser** steps through a laser's values on the real device so you can tag, rate and save looks. |
-| [![Control](docs/images/control.png)](docs/images/control.png) **Control** maps MIDI pads, faders and keys to routes, presets, master and blackout. | [![Scenes](docs/images/design.png)](docs/images/design.png) **Scenes** adds scenes from templates or an AI brief, for review before adding, next to the autopilot and your scenes. |
+| [![Control](docs/images/control.png)](docs/images/control.png) **Control** maps MIDI pads, faders and keys to scenes, routes, the autopilot, master and blackout, with pads lit to match. | [![Scenes](docs/images/scenes.png)](docs/images/scenes.png) **Scenes** set a look and routes for each group, tagged for the autopilot, with templates or the AI to make more. |
 
 Screenshots use the built-in demo show (see [Development](#development)).
 

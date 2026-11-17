@@ -8,6 +8,8 @@ The **Scenes** screen is where a show's scenes are made, edited and played:
 
 A scene is a **state of the whole rig** that one press switches to: every group in a look, with the routes you want running on top. For example, *Node mode*: pars on node hop to the kick with the wash routes off, lasers on a look tagged "node" with their rotation route on, fog off. Recall it from here, Live, or a pad or key, and every fixture changes together.
 
+![The Scenes screen: the autopilot bar on top, the scene list on the left, and the selected scene's rig on the right, with a look and routes for each fixture group](images/scenes.png)
+
 ## The rig in this scene
 
 The scene page lists your rig: **Whole rig** (routes aimed at everything), each fixture group, then any fixtures that aren't in a group. For each one:
@@ -146,6 +148,8 @@ Templates read the rig:
 ## Asking the AI
 
 **+ From template or AI… → Ask the AI** has two jobs. Both need an AI provider (set one up on the **AI** screen).
+
+![Asking the AI for new scenes: a brief, a genre, and the proposed scenes for review](images/scenes-add.png)
 
 - **New scenes**: describe the night and pick a genre. The AI proposes detection tuning, palettes, routes grouped into scenes, and the scenes, tagged for the autopilot and using per-section routes where it suits (strobe only on drops, say).
 - **Set up the autopilot**: the AI looks at what each of your scenes switches on and suggests scene tags, when to switch, and limits per section. You see the changes and **Apply** them; **Undo suggestion** puts things back.
