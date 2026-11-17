@@ -4,11 +4,10 @@
   import ConfirmButton from "../components/ConfirmButton.svelte";
   import TargetPicker from "../components/TargetPicker.svelte";
   import ChannelSelect from "../components/ChannelSelect.svelte";
-  import SceneEditor from "../components/SceneEditor.svelte";
   import ControllerSetup from "../components/ControllerSetup.svelte";
-  import Autopilot from "../components/Autopilot.svelte";
-  import { newScene, sceneSummary } from "../lib/scenes";
-  import { app, uid, toast, modeChannels } from "../lib/store.svelte";
+  import { isScene } from "../lib/scenes";
+  import { SECTIONS } from "../lib/autopilot";
+  import { app, uid, toast, modeChannels, startLearn } from "../lib/store.svelte";
   import { FEEDBACK_STYLES, type ControlAction, type ControlMapping, type MidiStatus, type Preset } from "../lib/types";
 
   const show = app.show!;
@@ -24,7 +23,7 @@
   const ACTIONS: { type: ControlAction["type"]; label: string; fader: boolean; make: () => ControlAction }[] = [
     { type: "routes", label: "Routes on/off", fader: false, make: () => ({ type: "routes", routes: [] }) },
     { type: "route_group", label: "Route group on/off", fader: false, make: () => ({ type: "route_group", group: routeGroups[0] ?? "" }) },
-    { type: "preset", label: "Recall preset", fader: false, make: () => ({ type: "preset", preset: show.presets[0]?.id ?? "" }) },
+    { type: "preset", label: "Recall scene or preset", fader: false, make: () => ({ type: "preset", preset: show.presets[0]?.id ?? "" }) },
     { type: "blackout", label: "Blackout", fader: false, make: () => ({ type: "blackout" }) },
     { type: "master", label: "Master brightness", fader: true, make: () => ({ type: "master" }) },
     { type: "channel_value", label: "Set a channel", fader: true, make: () => ({ type: "channel_value", target: { rooms: [], groups: [], fixtures: [] }, channel: "@intensity", min: 0, max: 255 }) },
@@ -32,6 +31,7 @@
     { type: "band_sensitivity", label: "Band sensitivity", fader: true, make: () => ({ type: "band_sensitivity", band: show.audio.bands[0]?.id ?? "" }) },
     { type: "release_manual", label: "Release all manual control", fader: false, make: () => ({ type: "release_manual" }) },
     { type: "autopilot", label: "Autopilot on/off", fader: false, make: () => ({ type: "autopilot" }) },
+    { type: "force_section", label: "Hold a section", fader: false, make: () => ({ type: "force_section", section: "drop" }) },
   ];
   /** The colour a pad lights in when the control has none of its own (matches control.rs). */
   function autoColor(m: ControlMapping): string {
@@ -45,6 +45,7 @@
       case "master": return "#ffffff";
       case "channel_value": return a.channel === "@fog" ? "#4fd8ff" : "#f2b54a";
       case "autopilot": return "#7c5cff";
+      case "force_section": return SECTIONS.find((s) => s.id === a.section)?.color ?? "#ff5c6c";
       default: return "#f2b54a";
     }
   }
@@ -79,33 +80,8 @@
     return t.kind === "cc" ? `CC ${t.number}${ch}` : t.kind === "program" ? `Program ${t.number}${ch}` : `Note ${t.number}${ch}`;
   };
 
-  // ---------- learn ----------
-  let learnStarted = 0;
-  function learn(id: string) {
-    app.learning = app.learning === id ? null : id;
-    learnStarted = Date.now();
-  }
-  $effect(() => {
-    const ev = app.midiLog[0];
-    const m = show.controls.find((c) => c.id === app.learning);
-    if (!ev || !m || m.trigger.source !== "midi" || ev.at < learnStarted) return;
-    if (ev.kind === "note" && ev.value === 0) return; // wait for a note-on
-    m.trigger.kind = ev.kind;
-    m.trigger.number = ev.number;
-    m.trigger.channel = ev.channel;
-    m.trigger.mode = ev.kind === "cc" && isFader(m) ? "fader" : m.trigger.mode === "fader" ? "toggle" : m.trigger.mode;
-    app.learning = null;
-    toast(`Learned ${triggerLabel(m)}`);
-  });
-  function onKeyLearn(e: KeyboardEvent) {
-    const m = show.controls.find((c) => c.id === app.learning);
-    if (!m || m.trigger.source !== "key") return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === "Escape") { app.learning = null; return; }
-    m.trigger.key = e.key.toLowerCase();
-    app.learning = null;
-  }
+  // ---------- learn (handled app-wide by Learn.svelte) ----------
+  const learn = (id: string) => startLearn(id);
 
   let tick = $state(0);
   // reads `tick` so the highlight clears on its own
@@ -139,38 +115,16 @@
   function describePreset(p: Preset) {
     const fx = new Set(p.values.map((v) => v.fixture));
     const names = show.fixtures.filter((f) => fx.has(f.id)).map((f) => f.name);
-    const { on, off } = sceneSummary(p, show.routes);
-    const parts = [
-      p.values.length && `${p.values.length} value${p.values.length === 1 ? "" : "s"}${names.length ? ` on ${names.join(", ")}` : ""}`,
-      (on || off) && `routes: ${on} on, ${off} off`,
-    ].filter(Boolean);
-    return parts.join(" · ") || "does nothing yet";
-  }
-  let editingScene = $state<string | null>(null);
-  function addScene() {
-    const p = newScene(show, uid("pre"), presetName);
-    show.presets.push(p);
-    presetName = "";
-    editingScene = p.id;
-  }
-  function assignScene(p: Preset, source: "midi" | "key") {
-    const m: ControlMapping = {
-      id: uid("ctl"), name: p.name, enabled: true,
-      trigger: { source, kind: "note", channel: 0, number: 36, key: "", mode: "on" },
-      action: { type: "preset", preset: p.id },
-    };
-    show.controls.push(m);
-    learn(m.id);
-    toast(source === "key" ? "Press the key for this scene…" : "Press the pad for this scene…");
+    return `${p.values.length} value${p.values.length === 1 ? "" : "s"}${names.length ? ` on ${names.join(", ")}` : ""}`;
   }
   function removePreset(p: Preset) {
     show.presets.splice(show.presets.indexOf(p), 1);
     for (const c of show.controls) if (c.action.type === "preset" && c.action.preset === p.id) c.action.preset = "";
   }
+  const presets = $derived(show.presets.filter((p) => !isScene(p)));
   void modeChannels;
 </script>
 
-<svelte:window onkeydowncapture={onKeyLearn} />
 
 <div class="ctl">
   <div class="col side">
@@ -224,34 +178,29 @@
   <div class="col grow">
     <div class="panel col">
       <div class="row">
-        <h2 class="grow">Scenes and presets</h2>
+        <h2 class="grow">Presets</h2>
         <input bind:value={presetName} placeholder="Name" />
-        <button class="primary" onclick={addScene}>+ New scene</button>
-        <button onclick={savePreset} title="Save the channels you've set by hand (and optionally which routes are on)">Save current look</button>
+        <button class="primary" onclick={savePreset} title="Save the channels you've set by hand">Save current look</button>
         <label class="row small"><input type="checkbox" bind:checked={includeRoutes} /> with route states</label>
       </div>
       <span class="small muted">
-        A scene switches route groups on and off: open <b>Edit scene</b> to choose. A preset can also hold channels you've set by hand
-        (Patch sliders, pattern browser, channel faders). Recall either from here, the Live screen, or a pad or key.
+        A preset holds channels you've set by hand (Patch sliders, pattern browser, channel faders). Scenes, which switch routes
+        and are played by the autopilot, are on the <button class="link" onclick={() => (app.view = "scenes")}>Scenes</button> screen.
       </span>
-      {#each show.presets as p (p.id)}
+      {#each presets as p (p.id)}
         <div class="preset row" class:active={app.activePresets.includes(p.id)} style="--c:{p.color}">
           <input type="color" bind:value={p.color} />
           <input class="pname" bind:value={p.name} />
           <span class="grow small faint">{describePreset(p)}</span>
           <label class="row small" title="Clear other manual values first"><input type="checkbox" bind:checked={p.exclusive} /> replace others</label>
           <button class="primary" onclick={() => invoke("preset_apply", { preset: p.id })}>Recall</button>
-          <button class:on={editingScene === p.id} onclick={() => (editingScene = editingScene === p.id ? null : p.id)}>Edit scene</button>
-          <button class="ghost" onclick={() => updatePreset(p)} title="Replace its hand-set channels (and route states, if it has them) with what's set now">Update from current</button>
+          <button class="ghost" onclick={() => updatePreset(p)} title="Replace its hand-set channels with what's set now">Update from current</button>
           <ConfirmButton onconfirm={() => removePreset(p)}>Delete</ConfirmButton>
         </div>
-        {#if editingScene === p.id}<SceneEditor preset={p} onassign={(src) => assignScene(p, src)} />{/if}
       {:else}
-        <span class="small faint">No scenes or presets yet. Start with <b>+ New scene</b>, or build a whole setup on the Design screen.</span>
+        <span class="small faint">No presets. Set channels by hand, then <b>Save current look</b>.</span>
       {/each}
     </div>
-
-    <Autopilot />
 
     <div class="panel col">
       <div class="row">
@@ -332,9 +281,12 @@
               </div>
             {:else if m.action.type === "band_sensitivity"}
               <select bind:value={m.action.band}>{#each show.audio.bands as b}<option value={b.id}>{b.name}</option>{/each}</select>
+            {:else if m.action.type === "force_section"}
+              <select bind:value={m.action.section}>{#each SECTIONS as x}<option value={x.id}>{x.name}</option>{/each}</select>
+              <span class="small faint">While on, plays as if this section were heard.</span>
             {:else if m.action.type === "preset"}
               <select bind:value={m.action.preset}>
-                <option value="">Choose a preset…</option>
+                <option value="">Choose a scene or preset…</option>
                 {#each show.presets as p}<option value={p.id}>{p.name}</option>{/each}
               </select>
             {:else if m.action.type === "channel_value"}
@@ -394,6 +346,7 @@
   .chip { font-size: 12px; padding: 3px 8px; }
   .chip.on { background: var(--accent-bg); border-color: var(--accent); }
   .test { padding-left: 24px; }
+  .link { padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; font: inherit; }
   input[type="color"] { width: 30px; padding: 2px; }
   input[type="number"] { width: 64px; }
 </style>

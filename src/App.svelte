@@ -12,7 +12,8 @@
   import AiSettings from "./views/AiSettings.svelte";
   import Zigbee from "./views/Zigbee.svelte";
   import Control from "./views/Control.svelte";
-  import Designer from "./views/Designer.svelte";
+  import Scenes from "./views/Scenes.svelte";
+  import Learn from "./components/Learn.svelte";
   import { invoke } from "@tauri-apps/api/core";
 
   const nav = [
@@ -21,7 +22,7 @@
     { id: "patch", label: "Patch", icon: "⌗" },
     { id: "library", label: "Fixture types", icon: "☰" },
     { id: "routes", label: "Routes", icon: "⇢" },
-    { id: "design", label: "Design", icon: "✧" },
+    { id: "scenes", label: "Scenes", icon: "✧" },
     { id: "control", label: "Control", icon: "◎" },
     { id: "audio", label: "Audio", icon: "∿" },
     { id: "outputs", label: "Art-Net", icon: "⇄" },
@@ -71,12 +72,13 @@
   const manualCount = $derived(Object.values(app.manual).reduce((n, m) => n + Object.keys(m).length, 0));
 </script>
 
+<Learn />
 <div class="shell">
   <aside>
     <div class="brand"><span class="dot"></span> LightDeck</div>
     {#if app.show}<FileMenu />{/if}
     {#each nav as n}
-      <button class="nav" class:active={app.view === n.id} onclick={() => (app.view = n.id)}>
+      <button class="nav" class:active={app.view === n.id || (n.id === "scenes" && app.view === "design")} onclick={() => (app.view = n.id)}>
         <span class="ic">{n.icon}</span>{n.label}
       </button>
     {/each}
@@ -121,7 +123,7 @@
       {:else if app.view === "patch"}<Patch />
       {:else if app.view === "library"}<Library />
       {:else if app.view === "routes"}<Routes />
-      {:else if app.view === "design"}<Designer />
+      {:else if app.view === "scenes" || app.view === "design"}<Scenes />
       {:else if app.view === "audio"}<Audio />
       {:else if app.view === "outputs"}<Outputs />
       {:else if app.view === "zigbee"}<Zigbee />

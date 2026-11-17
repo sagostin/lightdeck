@@ -1,6 +1,6 @@
 # Roadmap
 
-Ideas for where LightDeck goes next, roughly in order of priority. Done so far from this list: **MIDI feedback** (pad lights) and the **autopilot** (see [Live control](control.md)). Nothing here is a promise. The order follows how much each item helps a small live rig (a DJ night, a club room, a home setup) compared with how much work it is. For what exists today, see [Features](features.md).
+Ideas for where LightDeck goes next, roughly in order of priority. Done so far from this list: **MIDI feedback** (pad lights) and the **autopilot** (see [Scenes](scenes.md)). Nothing here is a promise. The order follows how much each item helps a small live rig (a DJ night, a club room, a home setup) compared with how much work it is. For what exists today, see [Features](features.md).
 
 Suggestions and pull requests are welcome. Open an issue to discuss bigger items first.
 
@@ -58,7 +58,7 @@ Aiming already knows each fixture's position, facing and tilt. For moving heads 
 Drive WLED controllers (DDP or Art-Net) as pixel strips, with segments mapped onto the room plan. This pairs with pixel bars.
 
 ### Autopilot, next steps
-The [autopilot](control.md#autopilot) is in. Ideas for taking it further:
+The [autopilot](scenes.md#autopilot) is in, with [sections](scenes.md#sections) for blocks and limits. Ideas for taking it further:
 
 - **Per-track memory.** With a setlist or [tempo sync](#tempo-sync), remember which scenes worked for a track.
 - **Learn from you.** Notice which scenes you pick by hand for each section and prefer them.

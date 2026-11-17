@@ -45,11 +45,32 @@ pub struct AutopilotSettings {
     pub drop_bars: u32,
     /// After you pick a scene yourself, wait this long before switching again.
     pub pause_s: u32,
+    /// Limits per section ("breakdown" -> no strobe…). Missing = no limits. These apply
+    /// whatever plays, autopilot on or off.
+    pub rules: std::collections::BTreeMap<String, SectionRule>,
 }
 
 impl Default for AutopilotSettings {
     fn default() -> Self {
-        Self { min_bars: 8, max_bars: 32, drop_bars: 2, pause_s: 60 }
+        Self { min_bars: 8, max_bars: 32, drop_bars: 2, pause_s: 60, rules: Default::default() }
+    }
+}
+
+/// What's allowed during a section.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct SectionRule {
+    /// Brightness cap, 0..1, applied like the master fader.
+    pub brightness: f32,
+    /// Strobe routes run.
+    pub strobe: bool,
+    /// Routes may drive fog channels (a fog pad you hold still works).
+    pub fog: bool,
+}
+
+impl Default for SectionRule {
+    fn default() -> Self {
+        Self { brightness: 1.0, strobe: true, fog: true }
     }
 }
 
@@ -102,6 +123,34 @@ pub struct Preset {
     pub exclusive: bool,
     /// Parts of a track ("breakdown", "groove", "build", "drop") the autopilot uses this scene for.
     pub sections: Vec<String>,
+    /// Looks the scene puts fixtures in while it plays. They sit underneath the routes:
+    /// routes still change those channels, and nothing needs releasing.
+    pub looks: Vec<SceneLook>,
+    /// Channel values the scene sets underneath its routes (captured from the rig).
+    /// Unlike `values` (manual overrides), routes can still change them.
+    pub base: Vec<PresetValue>,
+    /// The scene builder's blocks, kept so the scene can be edited as blocks again.
+    /// Owned by the UI; null for scenes made from routes.
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
+    pub blocks: serde_json::Value,
+}
+
+/// A saved look a scene puts some fixtures in.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct SceneLook {
+    pub target: Target,
+    /// Look id (or name) on the fixtures' type; fixtures without it are left alone.
+    pub look: String,
+    /// Heads to apply it to (multi-head fixtures); empty = the head it was saved on.
+    pub heads: Vec<String>,
+}
+
+impl Preset {
+    /// A scene (switches routes or sets a base state), as opposed to a preset of manual values.
+    pub fn is_scene(&self) -> bool {
+        !self.routes.is_empty() || !self.looks.is_empty() || !self.base.is_empty() || !self.blocks.is_null()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -195,6 +244,8 @@ pub enum ControlAction {
     BandSensitivity { band: String },
     /// Switch the autopilot on/off.
     Autopilot {},
+    /// Play as if this section were heard (hold or toggle), e.g. a drop the detector missed.
+    ForceSection { section: String },
 }
 
 impl Default for ControlAction {
@@ -375,6 +426,13 @@ pub struct Motion {
     pub source: String,
     /// catalog: catalogued values must carry these tags.
     pub tags: Vec<String>,
+    /// In routes: start the motion over on each hit (time and beats count from the hit).
+    pub retrigger: bool,
+    /// Play the motion once (one sweep, one pass through the steps), then hold the last value.
+    pub once: bool,
+    /// In routes: a hit source of its own ("snare", "bar"…) that clocks and restarts this
+    /// motion instead of the route's hits; "" = the route's own hits.
+    pub trigger: String,
 }
 
 impl Default for Motion {
@@ -390,6 +448,9 @@ impl Default for Motion {
             seed: 1,
             source: "level".into(),
             tags: vec![],
+            retrigger: false,
+            once: false,
+            trigger: String::new(),
         }
     }
 }
@@ -836,6 +897,33 @@ pub struct Route {
     pub every: u32,
     /// 0..1 chance a trigger fires.
     pub probability: f32,
+    /// Sections the route runs in ("breakdown", "groove", "build", "drop"); empty = always.
+    pub sections: Vec<String>,
+    /// The scene (preset id) that made this route and owns it; "" = made by hand.
+    pub scene: String,
+    /// Other channels this route also moves, on its fixtures: channel key (or "@type") ->
+    /// motion. E.g. a kick flash that also sweeps zoom open on each hit.
+    pub motions: std::collections::BTreeMap<String, Motion>,
+    /// Other routes this route switches on, off or over each time it fires.
+    pub switches: Vec<RouteSwitch>,
+}
+
+/// When a route fires, switch another route. The switch lasts `beats` beats (0 = until
+/// something else changes it: another switch, a scene, or you) and never changes the
+/// saved show: it's undone when it runs out.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct RouteSwitch {
+    pub route: String,
+    /// "on" | "off" | "toggle"
+    pub to: String,
+    pub beats: f32,
+}
+
+impl Default for RouteSwitch {
+    fn default() -> Self {
+        Self { route: String::new(), to: "on".into(), beats: 4.0 }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -912,9 +1000,36 @@ pub enum RouteAction {
         tags: Vec<String>,
         /// "random" (weighted by rating) | "cycle"
         mode: String,
+        /// Stay on a look at least this long.
         hold_ms: u32,
         /// Heads to apply to ("P1", "P2"). Empty = the head each look was saved on.
         heads: Vec<String>,
+        /// Only these looks (names or ids); empty = any that match the set and tags.
+        #[serde(default)]
+        looks: Vec<String>,
+        /// Prefer looks tagged with the section playing ("breakdown", "groove", "build",
+        /// "drop"), and change to one when the section changes.
+        #[serde(default)]
+        follow_section: bool,
+        /// Change look anyway after this long, even without a hit (0 = only on hits).
+        #[serde(default)]
+        max_ms: u32,
+        /// Chance (0..1) that a change rests instead: no look, so the fixture shows the
+        /// scene's look or its defaults.
+        #[serde(default)]
+        rest: f32,
+        /// How long a rest lasts (0 = until the next hit).
+        #[serde(default)]
+        rest_ms: u32,
+    },
+    /// Continuously move the route's channel: sweep, step, random, list, catalogue or
+    /// follow a level, like a look's moving channel.
+    Motion {
+        motion: Motion,
+        /// 0..1: offset each target fixture along the motion, so they chase instead of
+        /// moving together (1 = spread over one whole period).
+        #[serde(default)]
+        spread: f32,
     },
 }
 

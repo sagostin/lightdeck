@@ -2,13 +2,30 @@
   // Edit how one look channel moves: sweep / step / random / list / catalogue / follow.
   import { untrack } from "svelte";
   import Tags from "./Tags.svelte";
+  import Tip from "./Tip.svelte";
   import { app } from "../lib/store.svelte";
   import { sourceOptions, type ChannelDef, type Motion } from "../lib/types";
 
-  let { motion, channel }: { motion: Motion; channel: ChannelDef } = $props();
+  let { motion, channel, inRoute = false, routeSource = "" }: { motion: Motion; channel: ChannelDef; inRoute?: boolean; routeSource?: string } = $props();
 
   const usable = $derived(channel.capabilities.filter((c) => !c.tags.includes("blocked")));
   const levels = $derived(sourceOptions(app.show!.audio.bands).levels);
+  const hits = $derived(sourceOptions(app.show!.audio.bands).triggers);
+  const routeSourceLabel = $derived([...hits, ...levels].find((s) => s.id === routeSource)?.label.toLowerCase() ?? "the route's sound");
+  const usesHits = $derived(motion.clock === "hit" || !!motion.retrigger);
+  const TIP = {
+    kind: "Sweep glides through the ranges; Step jumps by a fixed amount; Random picks repeatable random values (same seed, same sequence); List plays your values in order; Catalogued plays the channel's catalogued values with these tags; Follow tracks an audio level.",
+    every: "How long one sweep, or one step, takes: in beats (follows the tempo), seconds, or hits.",
+    shape: "There and back = up then down; Up / Down = one way, then jump back; Smooth = an eased sine.",
+    step: "How far each step moves the value.",
+    seed: "The random sequence. The same seed always plays the same values, so a look looks the same each time.",
+    follow: "The sound the channel follows: one band (kick, bass, vocals… as set up on the Audio screen) or the whole track's level, energy or beat phase. Silent = bottom of the range, full = top.",
+    restart: "Start the motion over each time its sound hits, timed from that hit. E.g. zoom opening over one beat on every kick.",
+    once: "One sweep or one pass through the steps, then hold the last value (until it restarts).",
+    trigger: "The sound that counts hits for this channel and restarts it. Leave it on the route's own sound, or pick another: e.g. a kick flash whose zoom only restarts on each bar, or a pattern that steps on snares.",
+    ranges: "The values the motion moves through. Several ranges are played in order, which skips the values in between (e.g. only the usable parts of a channel).",
+    add: "The channel's named ranges from its fixture definition. Click to add one.",
+  };
   const catTags = $derived([...new Set(channel.values.flatMap((v) => v.tags))].sort());
   const catCount = $derived(
     channel.values.filter((v) => !v.tags.includes("blocked") && motion.tags.every((t) => v.tags.includes(t))).length,
@@ -31,32 +48,56 @@
       <option value="list">List of values</option>
       <option value="catalog">Catalogued values</option>
       <option value="follow">Follow audio level</option>
-    </select>
+    </select><Tip text={TIP.kind} />
     {#if motion.kind !== "follow"}
-      <span class="lbl">every</span>
+      <span class="lbl">every</span><Tip text={TIP.every} />
       <input type="number" min="0.25" step="0.25" bind:value={motion.period} />
       <select bind:value={motion.clock}>
-        <option value="beat">beats</option><option value="time">seconds</option><option value="hit">route hits</option>
+        <option value="beat">beats</option><option value="time">seconds</option><option value="hit">{inRoute ? "hits" : "route hits"}</option>
       </select>
     {/if}
     {#if motion.kind === "sweep"}
       <select bind:value={motion.shape}>
         <option value="pingpong">there and back</option><option value="up">up, then jump</option>
         <option value="down">down, then jump</option><option value="sine">smooth (sine)</option>
-      </select>
+      </select><Tip text={TIP.shape} />
     {:else if motion.kind === "step"}
-      <span class="lbl">by</span><input type="number" min="1" max="255" bind:value={motion.step} />
+      <span class="lbl">by</span><Tip text={TIP.step} /><input type="number" min="1" max="255" bind:value={motion.step} />
     {:else if motion.kind === "random"}
-      <span class="lbl">seed</span><input type="number" min="1" bind:value={motion.seed} />
+      <span class="lbl">seed</span><Tip text={TIP.seed} /><input type="number" min="1" bind:value={motion.seed} />
       <button class="ghost" onclick={() => (motion.seed = Math.floor(Math.random() * 1e6) + 1)} title="Try a different repeatable sequence">New seed</button>
     {:else if motion.kind === "follow"}
-      <select bind:value={motion.source}>{#each levels as l}<option value={l.id}>{l.label}</option>{/each}</select>
+      <span class="lbl">follows</span>
+      <select bind:value={motion.source} title="The sound whose level drives this channel">
+        <optgroup label="One band">{#each levels.filter((l) => l.id.endsWith(".level")) as l}<option value={l.id}>{l.label.replace(/ level$/, "")}</option>{/each}</optgroup>
+        <optgroup label="The whole track">{#each levels.filter((l) => !l.id.endsWith(".level")) as l}<option value={l.id}>{l.label}</option>{/each}</optgroup>
+        {#if motion.source && !levels.some((l) => l.id === motion.source)}<option value={motion.source}>{motion.source} (band removed)</option>{/if}
+      </select><Tip text={TIP.follow} />
     {/if}
   </div>
+  {#if motion.kind !== "follow"}
+    <div class="row flow">
+      {#if inRoute && motion.clock !== "hit"}
+        <label class="chk">
+          <input type="checkbox" checked={!!motion.retrigger} onchange={(e) => (motion.retrigger = e.currentTarget.checked)} /> restart on each hit
+        </label><Tip text={TIP.restart} />
+      {/if}
+      <label class="chk">
+        <input type="checkbox" checked={!!motion.once} onchange={(e) => (motion.once = e.currentTarget.checked)} /> play once, then hold
+      </label><Tip text={TIP.once} />
+      {#if inRoute && usesHits}
+        <span class="lbl">hits from</span>
+        <select value={motion.trigger ?? ""} onchange={(e) => (motion.trigger = e.currentTarget.value || undefined)}>
+          <option value="">{routeSourceLabel} (the route's)</option>
+          {#each hits.filter((h) => h.id !== routeSource) as h}<option value={h.id}>{h.label}</option>{/each}
+        </select><Tip text={TIP.trigger} />
+      {/if}
+    </div>
+  {/if}
 
   {#if needsRanges}
     <div class="row flow">
-      <span class="lbl">ranges</span>
+      <span class="lbl">ranges</span><Tip text={TIP.ranges} />
       {#each motion.ranges as r, i}
         <span class="rng">
           <input type="number" min="0" max="255" bind:value={r[0]} />–<input type="number" min="0" max="255" bind:value={r[1]} />
@@ -67,7 +108,7 @@
     </div>
     {#if usable.length > 1}
       <div class="row flow caps">
-        <span class="lbl">add</span>
+        <span class="lbl">add</span><Tip text={TIP.add} />
         {#each usable as c}
           <button class="cap" title="{c.min}–{c.max}" onclick={() => addRange([c.min, c.max])}>{c.label}</button>
         {/each}
@@ -99,5 +140,6 @@
   select { height: 26px; }
   .rng { display: inline-flex; align-items: center; gap: 2px; }
   .x { padding: 0 5px; font-size: 11px; }
+  .chk { display: inline-flex; gap: 4px; align-items: center; margin: 0; font-size: 12px; color: var(--muted); }
   .caps .cap { font-size: 11px; padding: 2px 6px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

@@ -46,6 +46,8 @@ pub struct ControlState {
     pub master: f32,
     pub manual: HashMap<String, HashMap<String, u8>>,
     pub active_presets: Vec<String>,
+    /// The scene playing (its looks are the layer under the routes).
+    pub scene: Option<String>,
     pub autopilot: bool,
     /// The mapping that just fired, for on-screen feedback.
     pub fired: Option<String>,
@@ -59,6 +61,8 @@ pub struct Controls {
     pub audio: Arc<AudioParams>,
     pub app: AppHandle,
     pub autopilot: Arc<Autopilot>,
+    /// The playing scene, shared with the engine.
+    pub scene: Arc<Mutex<Option<(String, std::time::Instant)>>>,
     toggles: Mutex<HashSet<String>>,
     active_presets: Mutex<HashSet<String>>,
     /// The scene recalled last, by anyone.
@@ -74,6 +78,7 @@ impl Controls {
         audio: Arc<AudioParams>,
         app: AppHandle,
         autopilot: Arc<Autopilot>,
+        scene: Arc<Mutex<Option<(String, std::time::Instant)>>>,
     ) -> (Arc<Self>, Sender<Input>) {
         let c = Arc::new(Self {
             show,
@@ -83,6 +88,7 @@ impl Controls {
             audio,
             app,
             autopilot,
+            scene,
             toggles: Mutex::new(HashSet::new()),
             active_presets: Mutex::new(HashSet::new()),
             last_scene: Mutex::new(None),
@@ -225,6 +231,15 @@ impl Controls {
                     self.set_autopilot(on);
                 }
             }
+            ControlAction::ForceSection { section } => {
+                let current = self.autopilot.forced() == Some(section.as_str());
+                match fader_or_button(mode, pressed, value, current) {
+                    Some(true) => self.autopilot.force(Some(section)),
+                    // Letting go only clears it if this pad set it.
+                    Some(false) if current => self.autopilot.force(None),
+                    _ => {}
+                }
+            }
             ControlAction::ReleaseManual {} => {
                 if pressed {
                     self.manual.lock().unwrap().clear();
@@ -275,13 +290,10 @@ impl Controls {
         self.autopilot.set_running(on, current);
     }
 
-    /// Is a scene showing? Scenes that switch routes: when every route is as the scene says.
-    /// Scenes of channel values only: while recalled.
-    fn scene_on(show: &Show, p: &Preset, active: &HashSet<String>) -> bool {
-        if p.routes.is_empty() {
-            return active.contains(&p.id);
-        }
-        p.routes.iter().all(|(id, on)| show.routes.iter().find(|r| &r.id == id).map(|r| r.enabled == *on).unwrap_or(true))
+    /// Is a scene showing? A scene: while it's the one playing. A preset of manual values:
+    /// while recalled.
+    fn scene_on(p: &Preset, active: &HashSet<String>, playing: Option<&str>) -> bool {
+        if p.is_scene() { playing == Some(p.id.as_str()) } else { active.contains(&p.id) }
     }
 
     /// The pads to light for MIDI feedback, one per MIDI trigger.
@@ -290,10 +302,12 @@ impl Controls {
         let active = self.active_presets.lock().unwrap().clone();
         let toggles = self.toggles.lock().unwrap().clone();
         let any_manual = !self.manual.lock().unwrap().is_empty();
+        let playing = self.scene.lock().unwrap().as_ref().map(|(id, _)| id.clone());
         let show = self.show.read().unwrap();
         let blackout = self.blackout.load(Ordering::Relaxed);
         let master = f32::from_bits(self.master.load(Ordering::Relaxed));
         let autopilot = self.autopilot.running();
+        let forced = self.autopilot.forced();
         let mut out: Vec<Led> = vec![];
         for m in show.controls.iter().filter(|m| m.enabled && m.trigger.source == "midi" && m.trigger.kind != "program") {
             // Faders have no light, except on/off actions on CC buttons.
@@ -303,7 +317,7 @@ impl Controls {
             let (lit, auto) = match &m.action {
                 ControlAction::Preset { preset } => {
                     let p = show.presets.iter().find(|p| &p.id == preset);
-                    (p.is_some_and(|p| Self::scene_on(&show, p, &active)), p.map(|p| p.color.clone()).unwrap_or_default())
+                    (p.is_some_and(|p| Self::scene_on(p, &active, playing.as_deref())), p.map(|p| p.color.clone()).unwrap_or_default())
                 }
                 ControlAction::Routes { routes } => {
                     let rs: Vec<&Route> = show.routes.iter().filter(|r| routes.contains(&r.id)).collect();
@@ -323,6 +337,7 @@ impl Controls {
                 }
                 ControlAction::BandSensitivity { .. } => (false, "#f2b54a".into()),
                 ControlAction::Autopilot {} => (autopilot, "#7c5cff".into()),
+                ControlAction::ForceSection { section } => (forced == Some(section.as_str()), section_color(section).into()),
             };
             let color = parse_hex(if m.color.is_empty() { &auto } else { &m.color });
             let led = Led { kind: m.trigger.kind.clone(), channel: m.trigger.channel, number: m.trigger.number, lit, color };
@@ -370,7 +385,15 @@ impl Controls {
             }
             active.insert(p.id.clone());
             *self.last_scene.lock().unwrap() = Some(p.id.clone());
+            if p.is_scene() {
+                *self.scene.lock().unwrap() = Some((p.id.clone(), std::time::Instant::now()));
+            }
         } else {
+            let mut sc = self.scene.lock().unwrap();
+            if sc.as_ref().is_some_and(|(id, _)| id == &p.id) {
+                *sc = None;
+            }
+            drop(sc);
             for v in &p.values {
                 manual.remove(&(v.fixture.clone(), v.channel.clone()));
             }
@@ -384,6 +407,7 @@ impl Controls {
             manual.entry(f.clone()).or_default().insert(c.clone(), *v);
         }
         let active_presets = self.active_presets.lock().unwrap().iter().cloned().collect();
+        let scene = self.scene.lock().unwrap().as_ref().map(|(id, _)| id.clone());
         let show = self.show.read().unwrap();
         ControlState {
             routes: show.routes.iter().map(|r| (r.id.clone(), r.enabled)).collect(),
@@ -397,6 +421,7 @@ impl Controls {
             master: f32::from_bits(self.master.load(Ordering::Relaxed)),
             manual,
             active_presets,
+            scene,
             autopilot: self.autopilot.running(),
             fired,
         }
@@ -404,6 +429,16 @@ impl Controls {
 
     fn emit_state(&self, fired: Option<String>) {
         let _ = self.app.emit("control_state", self.state(fired));
+    }
+}
+
+/// Section colours, as in the UI.
+pub fn section_color(s: &str) -> &'static str {
+    match s {
+        "breakdown" => "#4fb3ff",
+        "build" => "#f2b54a",
+        "drop" => "#ff5c6c",
+        _ => "#45d39a",
     }
 }
 

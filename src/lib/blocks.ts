@@ -5,6 +5,7 @@ import type { Plan } from "./design";
 import type { Genre } from "./genres";
 import type { Fixture, Palette, Preset, Route, RouteAction, Section, Show } from "./types";
 import { guessSections } from "./autopilot";
+import { clone } from "./clone";
 import { activeFixtures, canGlow, hasLooks, hasType, lookTags, profileFor } from "./rig";
 
 type Target = Pick<Route, "rooms" | "groups" | "fixtures">;
@@ -106,9 +107,36 @@ export interface BlockUse {
   palette?: string;
   /** Laser look tag: "" any, "calm"/"peak" (best match in your tags), or a tag. */
   tag?: string;
+  /** Laser looks: pick looks tagged with the section playing (breakdown, groove, build, drop). */
+  follow?: boolean;
+  /** Plays only in these sections; empty or missing = always. */
+  sections?: Section[];
+  /** Different settings in some sections, e.g. faster with peak looks in the drop. */
+  variants?: Partial<Record<Section, Variant>>;
+}
+/** Settings a block can change per section. */
+export type Variant = Partial<Pick<BlockUse, "speed" | "sound" | "palette" | "tag">>;
+export const ALL_SECTIONS: Section[] = ["breakdown", "groove", "build", "drop"];
+
+/**
+ * How a block splits into routes: one per variant section, plus one for the sections it
+ * plays in without a variant. `sections: []` on a part means always.
+ */
+export function blockParts(u: BlockUse): { use: BlockUse; sections: Section[]; label: string }[] {
+  const plays = u.sections?.length ? u.sections : ALL_SECTIONS;
+  const varied = plays.filter((s) => u.variants?.[s] && Object.keys(u.variants[s]!).length);
+  if (!varied.length) return [{ use: u, sections: u.sections?.length && u.sections.length < 4 ? [...u.sections] : [], label: "" }];
+  const rest = plays.filter((s) => !varied.includes(s));
+  return [
+    ...(rest.length ? [{ use: u, sections: rest, label: "" }] : []),
+    ...varied.map((s) => ({ use: { ...u, ...u.variants![s] }, sections: [s], label: s })),
+  ];
 }
 /** A scene to build. `sections` tags it for the autopilot; left out, they're guessed. */
 export interface SceneSpec { name: string; blocks: BlockUse[]; sections?: Section[] }
+
+/** Scene preset ids in a built plan: one per scene, in order (scenes that build nothing are dropped). */
+export const builtSceneId = (i: number) => `t-p${i + 1}`;
 
 export function defaultTarget(needs: Needs) {
   return needs === "laser" ? "lasers" : needs === "fog" ? "fog" : "all";
@@ -207,9 +235,10 @@ export function buildScenes(show: Show, scenes: SceneSpec[], opts: BuildOptions)
   const routes: Route[] = [];
   const skipped: string[] = [];
   let n = 0;
-  for (const scene of scenes) {
+  for (const [si, scene] of scenes.entries()) {
     const used = new Map<string, number>();
-    for (const u of scene.blocks) {
+    for (const part of scene.blocks.flatMap(blockParts)) {
+      const u = part.use;
       const d = blockDef(u.block);
       if (!d) continue;
       const target = resolveTarget(u, d.needs);
@@ -257,7 +286,7 @@ export function buildScenes(show: Show, scenes: SceneSpec[], opts: BuildOptions)
         }
         case "laser": {
           const tag = tagFor(u.tag);
-          action = { type: "look", set: "", include_defaults: true, tags: tag ? [tag] : [], mode: "random", hold_ms: pick(s, 8000, 3000, 800), heads: [] };
+          action = { type: "look", set: "", include_defaults: true, tags: tag ? [tag] : [], mode: "random", hold_ms: pick(s, 8000, 3000, 800), heads: [], follow_section: !!u.follow };
           if (isHit(src) && src !== "bar" && src !== "beat") extra.every = pick(s, 8, 4, 2);
           break;
         }
@@ -270,27 +299,29 @@ export function buildScenes(show: Show, scenes: SceneSpec[], opts: BuildOptions)
       }
       const where = u.target === "a" ? "half A" : u.target === "b" ? "half B"
         : u.target.startsWith("g:") ? show.groups.find((g) => g.id === u.target.slice(2))?.name ?? "" : "";
-      const base = where ? `${d.name} · ${where}` : d.name;
+      const base = [d.name, where, part.label].filter(Boolean).join(" · ");
       const count = (used.get(base) ?? 0) + 1;
       used.set(base, count);
       routes.push({
         id: `t-r${++n}`, name: count > 1 ? `${base} ${count}` : base, group: scene.name, enabled: false, source: src,
         ...target, channel: "", focus: "", falloff: false, action, cooldown_ms: 0, every: 1, probability: 1, ...extra,
+        sections: part.sections, scene: builtSceneId(si),
       });
     }
   }
 
-  const names = [...new Set(scenes.map((sc) => sc.name).filter((nm) => routes.some((r) => r.group === nm)))];
   const colors = ["#ff8a00", "#ffd27a", "#ff3355", "#4fd1ff", "#45d39a", "#7c5cff"];
-  const presets: Preset[] = names.map((nm, i) => ({
-    id: `t-p${i + 1}`, name: nm, color: colors[i % colors.length], values: [], exclusive: false,
-    routes: Object.fromEntries(routes.map((r) => [r.id, r.group === nm])),
-  }));
+  const presets: Preset[] = scenes.map((sc, i) => ({
+    id: builtSceneId(i), name: sc.name, color: colors[i % colors.length], values: [], exclusive: false,
+    routes: Object.fromEntries(routes.map((r) => [r.id, r.scene === builtSceneId(i)])),
+    blocks: clone(sc.blocks),
+  })).filter((p) => routes.some((r) => r.scene === p.id));
   for (const p of presets) {
-    const spec = scenes.find((sc) => sc.name === p.name);
+    const spec = scenes[Number(p.id.slice(3)) - 1];
     p.sections = spec?.sections ? [...spec.sections] : guessSections({ ...show, routes }, p).sections;
   }
-  for (const r of routes) r.enabled = r.group === names[0];
+  const names = presets.map((p) => p.name);
+  for (const r of routes) r.enabled = r.scene === presets[0]?.id;
 
   const notes = [
     !rig.glow.length && "no colour or brightness fixtures were found, so only lasers and fog are used",

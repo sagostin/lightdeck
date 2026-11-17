@@ -1,3 +1,4 @@
+import type { BlockUse } from "./blocks";
 export interface Capability { min: number; max: number; label: string; color: string | null; tags: string[] }
 export interface ValueNote { value: number; label: string; tags: string[]; rating: number }
 export interface ChannelDef {
@@ -25,6 +26,12 @@ export interface Motion {
   ranges: [number, number][]; values: number[];
   clock: "beat" | "time" | "hit"; period: number;
   shape: "up" | "down" | "pingpong" | "sine"; step: number; seed: number; source: string; tags: string[];
+  /** In routes: start over on each hit (time and beats count from the hit). */
+  retrigger?: boolean;
+  /** One pass (one sweep, one run through the steps), then hold the last value. */
+  once?: boolean;
+  /** In routes: a hit source of its own that restarts and counts this motion ("" = the route's hits). */
+  trigger?: string;
 }
 export const newMotion = (kind: Motion["kind"], ranges: [number, number][] = [[0, 255]]): Motion => ({
   kind, ranges, values: [], clock: "beat", period: kind === "sweep" ? 4 : 1, shape: "pingpong", step: 1,
@@ -33,13 +40,17 @@ export const newMotion = (kind: Motion["kind"], ranges: [number, number][] = [[0
 export function describeMotion(m: Motion) {
   const span = m.ranges.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ");
   const per = m.clock === "hit" ? (m.period === 1 ? "per hit" : `every ${m.period} hits`) : m.clock === "time" ? `${m.period}s` : `${m.period} beat${m.period === 1 ? "" : "s"}`;
+  const how = `${m.trigger ? `, on ${m.trigger} hits` : ""}${m.retrigger ? ", from each hit" : ""}${m.once ? ", once" : ""}`;
+  return describeKind(m, span, per) + how;
+}
+function describeKind(m: Motion, span: string, per: string) {
   switch (m.kind) {
     case "sweep": return `sweep ${span} (${m.shape}, ${per})`;
     case "step": return `step ${span} by ${m.step}, ${per}`;
     case "random": return `random ${span}, ${per}, seed ${m.seed}`;
     case "list": return `list ${m.values.join(", ")}, ${per}`;
     case "catalog": return `catalogue${m.tags.length ? ` [${m.tags.join(", ")}]` : ""}, ${per}`;
-    case "follow": return `follow ${m.source} across ${span}`;
+    case "follow": return `follow ${m.source === "level" ? "the overall level" : m.source.replace(/\.level$/, " level")} across ${span}`;
   }
 }
 export interface LookSet { id: string; name: string; color: string }
@@ -74,7 +85,19 @@ export type RouteAction =
   | { type: "twinkle"; palette: string; amount: number; decay_ms: number; base: number }
   | { type: "wave"; palette: string; axis: "x" | "y" | "radial" | "angle" | "height"; beats: number; width: number; base: number }
   | { type: "cycle"; values: number[] }
-  | { type: "look"; set: string; include_defaults: boolean; tags: string[]; mode: "random" | "cycle"; hold_ms: number; heads: string[] };
+  | {
+    type: "look"; set: string; include_defaults: boolean; tags: string[]; mode: "random" | "cycle"; hold_ms: number; heads: string[];
+    /** Only these looks (names); empty = any matching the set and tags. */
+    looks?: string[];
+    /** Prefer looks tagged with the section playing, and change when it changes. */
+    follow_section?: boolean;
+    /** Change anyway after this long without a hit (0 = only on hits). */
+    max_ms?: number;
+    /** Chance a change shows no look (the scene's look or defaults), and for how long (0 = until the next hit). */
+    rest?: number; rest_ms?: number;
+  }
+  /** Keep moving the route's channel (sweep, step, random…); spread 0..1 makes fixtures chase. */
+  | { type: "motion"; motion: Motion; spread: number };
 export interface Route {
   id: string; name: string; group: string; enabled: boolean; source: string;
   /** Rooms scope the targets; fixture ids and group ids pick within them (both empty = all in scope). */
@@ -86,7 +109,17 @@ export interface Route {
   /** Effects dim with distance from the focus, reaching zero at its radius. */
   falloff: boolean;
   action: RouteAction; cooldown_ms: number; every: number; probability: number;
+  /** Runs only during these sections; empty or missing = always. */
+  sections?: Section[];
+  /** The scene (preset id) that built this route; "" or missing = made by hand. */
+  scene?: string;
+  /** Other channels this route also moves on its fixtures: channel key (or "@type") -> motion. */
+  motions?: Record<string, Motion>;
+  /** Other routes this route switches each time it fires. */
+  switches?: RouteSwitch[];
 }
+/** When a route fires, switch another route on, off or over for `beats` beats (0 = until changed). */
+export interface RouteSwitch { route: string; to: "on" | "off" | "toggle"; beats: number }
 export interface BandRange { lo_hz: number; hi_hz: number; weight: number }
 export interface BandDef {
   id: string; name: string; enabled: boolean; ranges: BandRange[]; detect: "transient" | "level"; level_threshold: number;
@@ -102,10 +135,18 @@ export interface Show {
 }
 /** Parts of a track the autopilot tells apart. */
 export type Section = "breakdown" | "groove" | "build" | "drop";
-export interface AutopilotSettings { min_bars: number; max_bars: number; drop_bars: number; pause_s: number }
+export interface AutopilotSettings {
+  min_bars: number; max_bars: number; drop_bars: number; pause_s: number;
+  /** Limits per section; a missing section has none. */
+  rules?: Partial<Record<Section, SectionRule>>;
+}
+/** What's allowed during a section: a brightness cap (0..1), strobe, fog from routes. */
+export interface SectionRule { brightness: number; strobe: boolean; fog: boolean }
 export interface AutopilotStatus {
   running: boolean; section: Section; history: Section[]; scene: string | null; bars_in_scene: number;
   paused_s: number; reason: string; scenes: number; loudness: number;
+  /** A section held on a pad or on screen. */
+  forced?: Section | null;
 }
 /** An autopilot set-up suggested by the AI, checked against the show. */
 export interface AutopilotPlan { sections: Record<string, Section[]>; settings: AutopilotSettings; notes: string; warnings: string[] }
@@ -115,7 +156,7 @@ export interface Features {
   beats: number; bpm: number; beat_phase: number;
   spectrum: number[];
 }
-export interface Frame { features: Features; fixtures: Record<string, number[]>; blackout: boolean; send_errors: string[] }
+export interface Frame { features: Features; fixtures: Record<string, number[]>; blackout: boolean; send_errors: string[]; switched?: Record<string, boolean> }
 export interface AiSettings {
   schema: "anthropic" | "openai"; base_url: string; api_key: string; model: string;
   auth: "x-api-key" | "bearer" | "none"; extra_headers: Record<string, string>; max_tokens: number;
@@ -184,7 +225,15 @@ export interface Preset {
   id: string; name: string; color: string; values: PresetValue[]; routes: Record<string, boolean>; exclusive: boolean;
   /** Parts of a track the autopilot may use this scene for. */
   sections?: Section[];
+  /** The scene's building blocks; the scene's routes are built from them. Missing = a scene of routes. */
+  blocks?: BlockUse[];
+  /** Looks fixtures sit in while the scene plays, underneath its routes. */
+  looks?: SceneLook[];
+  /** Channel values the scene sets underneath its routes (captured from the rig). */
+  base?: PresetValue[];
 }
+/** A saved look (by name) some fixtures are put in while a scene plays. */
+export interface SceneLook { target: Target; look: string; heads: string[] }
 export interface MidiSettings {
   enabled: boolean; inputs: string[];
   /** Light up controller pads to show what's on. */
@@ -214,7 +263,8 @@ export type ControlAction =
   | { type: "release_manual" }
   | { type: "channel_value"; target: Target; channel: string; min: number; max: number }
   | { type: "band_sensitivity"; band: string }
-  | { type: "autopilot" };
+  | { type: "autopilot" }
+  | { type: "force_section"; section: Section };
 export interface ControlMapping {
   id: string; name: string; enabled: boolean; trigger: ControlTrigger; action: ControlAction;
   /** Pad colour for MIDI feedback; "" or missing = a colour for the action. */
@@ -224,7 +274,7 @@ export interface MidiEvent { port: string; kind: "note" | "cc" | "program"; chan
 export interface MidiStatus { enabled: boolean; available: string[]; connected: string[]; feedback?: [string, string][]; error: string | null }
 export interface ControlState {
   routes: Record<string, boolean>; bands: Record<string, { enabled: boolean; sensitivity: number }>;
-  blackout: boolean; master: number; manual: Record<string, Record<string, number>>; active_presets: string[]; autopilot?: boolean; fired: string | null;
+  blackout: boolean; master: number; manual: Record<string, Record<string, number>>; active_presets: string[]; scene?: string | null; autopilot?: boolean; fired: string | null;
 }
 
 export interface Palette { id: string; name: string; colors: string[] }

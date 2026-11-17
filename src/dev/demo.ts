@@ -206,7 +206,7 @@ function demoAutopilot(beats: number, kick: number) {
   const bar = Math.floor(beats / 4);
   if (bar === lastBar || !app.show) return;
   lastBar = bar;
-  const section = SCRIPT[bar % SCRIPT.length];
+  const section = ap.forced ?? SCRIPT[bar % SCRIPT.length];
   ap.section = section;
   ap.history = [...ap.history, section].slice(-32);
   ap.loudness = { breakdown: 0.15, groove: 0.5, build: 0.7, drop: 0.95 }[section] * (0.9 + 0.1 * kick);

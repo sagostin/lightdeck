@@ -4,7 +4,7 @@
   import { captureRoutes, groupState, routeGroups, routeState, setRoutes, soloGroups, type RouteState } from "../lib/scenes";
   import type { Preset } from "../lib/types";
 
-  let { preset, onassign }: { preset: Preset; onassign: (source: "midi" | "key") => void } = $props();
+  let { preset }: { preset: Preset } = $props();
   const show = app.show!;
   const groups = $derived(routeGroups(show.routes));
   let open = $state<Record<string, boolean>>({});
@@ -13,9 +13,6 @@
     { id: "off", label: "Off", title: "This scene turns these routes off" },
     { id: "leave", label: "—", title: "This scene leaves these routes as they are" },
   ];
-  const triggers = $derived(show.controls.filter((c) => c.action.type === "preset" && c.action.preset === preset.id));
-  const trig = (c: (typeof show.controls)[number]) =>
-    c.trigger.source === "key" ? `Key ${c.trigger.key.toUpperCase() || "?"}` : `${c.trigger.kind === "cc" ? "CC" : "Note"} ${c.trigger.number}`;
 </script>
 
 <div class="scene col">
@@ -54,13 +51,6 @@
   {:else}
     <span class="small faint">No routes yet. Add routes on the Routes screen, and give them a group to switch them together.</span>
   {/each}
-  <div class="row small">
-    <span class="muted">Triggered by:</span>
-    {#each triggers as c}<span class="tag mono">{trig(c)}</span>{:else}<span class="faint">nothing yet</span>{/each}
-    <span class="grow"></span>
-    <button class="ghost" onclick={() => onassign("midi")}>+ MIDI pad</button>
-    <button class="ghost" onclick={() => onassign("key")}>+ Key</button>
-  </div>
 </div>
 
 <style>

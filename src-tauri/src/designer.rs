@@ -82,7 +82,7 @@ How LightDeck works
 - "channel": a channel key, or "@<type>" for every channel of that type (types: intensity, color, pan, tilt, pattern, beam, effect, speed, strobe, mode, fog, other). Needed for modulate/flash/random/node_hop/cycle. Ignored ("") for palette/twinkle/wave/strobe (they drive brightness+colour of whole fixtures) and look.
 - "focus": a focus point id effects centre on ("" = centre of targets); "falloff": dim with distance from it.
 - Routes are organised by "group" (a folder name). Use groups as SCENES ("Warm-up", "Groove", "Build", "Drop", "Breakdown", "Always on").
-- Route fields: id, name, group, enabled, source, rooms, fixtures, groups, channel, focus, falloff, action, cooldown_ms, every (fire every Nth event, >=1), probability (0..1).
+- Route fields: id, name, group, enabled, source, rooms, fixtures, groups, channel, focus, falloff, action, cooldown_ms, every (fire every Nth event, >=1), probability (0..1), motions:{channel key or "@type": motion (as in the motion action)} (other channels this route also moves on its fixtures, e.g. a kick look route with {"p1_zoom": {kind:"sweep", ranges:[[0,127]], clock:"beat", period:1, shape:"up", retrigger:true, once:true}} opens the zoom on each kick, or a slow rotation sweep on top of any look; a motion here may add trigger:"<hit source>" to restart and count on that sound instead of the route's, e.g. a kick flash whose zoom restarts on each "bar"), switches:[{route:"<route id>", to:"on"|"off"|"toggle", beats}] (each time this route fires, switch other routes for that many beats, 0 = until changed again; e.g. a "build" snare route switching a strobe route on for 8 beats, or a bar route toggling a wave route every bar. A route with switches needs no channel or targets of its own), sections:[...] (run only during these parts of a track: "breakdown", "groove", "build", "drop"; [] = always). One scene can follow the whole track with section-only routes, e.g. a strobe route with sections ["drop"] and a gentle wave with ["breakdown"].
 - Actions (field "type"):
   modulate {min,max 0-255, smoothing 0..0.98}            level source -> channel value
   flash {on, off 0-255, decay_ms}                         trigger -> jump to on, decay to off
@@ -93,10 +93,11 @@ How LightDeck works
   palette {palette, mode:"all"|"spread"|"rings"|"around"|"random", fade_ms, brightness 0-255 (0 = leave brightness to other routes)}  each trigger steps colour
   twinkle {palette, amount, decay_ms, base 0-255}         sparkles; amount = per second (level source) or per hit
   wave {palette, axis:"x"|"y"|"radial"|"angle"|"height", beats, width 0.05..1, base}  moving band of light, beat-synced (use source "beat")
-  look {set:"" or look-set id, include_defaults, tags:[...], mode:"random"|"cycle", hold_ms, heads:[...]}  applies saved looks (lasers/patterns) chosen by tags
-- Presets (scenes): {id, name, color "#rrggbb", values:[{fixture, channel, value}], routes:{route_id: true|false}, exclusive, sections:[...]}. "sections" lists the parts of a track the AUTOPILOT may use the scene for: "breakdown" (quiet, no kick), "groove" (steady main part), "build" (rising tension), "drop" (loudest, full kick). A preset with routes switches those routes; every generated route NOT listed in a scene preset is switched OFF by it, so list the ones that should be on. Keep "values" empty unless a fixed static look is wanted.
+  motion {motion:{kind:"sweep"|"step"|"random"|"list"|"catalog"|"follow", ranges:[[min,max],...], values:[...] (list), clock:"beat"|"time"|"hit", period (beats/seconds/hits per sweep or step), shape:"pingpong"|"up"|"down"|"sine" (sweep), step, seed, source (follow: a level source), tags (catalog), retrigger (bool: start over on each hit of the route's source), once (bool: one pass, then hold)}, spread 0..1}  continuously moves the route's channel (laser rotation/position/zoom sweeps, pattern steps); spread offsets each fixture so they chase. Any source; clock "hit" advances on the source's hits
+  look {set:"" or look-set id, include_defaults, tags:[...], looks:[look names, or [] for any], mode:"random"|"cycle", hold_ms (stay at least), max_ms (change anyway after, 0 = only on hits), follow_section (bool: prefer looks tagged with the section playing, e.g. "drop"), rest (0..1 chance a change shows no look), rest_ms, heads:[...]}  applies saved looks (lasers/patterns) chosen by tags. Use source "bar" with every N to change every N bars.
+- Presets (scenes): {id, name, color "#rrggbb", values:[{fixture, channel, value}], routes:{route_id: true|false}, exclusive, sections:[...], looks:[{target:{rooms,groups,fixtures}, look: a saved look's name from own_looks, heads:[] (empty = the head it was saved on)}], base:[{fixture, channel, value}]}. "looks" put fixtures in a fixed look while the scene plays and "base" sets channel values; both sit UNDER the routes (routes still change those channels), so use them for a scene's resting state, e.g. lasers on a calm look with a rotation route on top. "sections" lists the parts of a track the AUTOPILOT may use the scene for: "breakdown" (quiet, no kick), "groove" (steady main part), "build" (rising tension), "drop" (loudest, full kick). A preset with routes switches those routes; every generated route NOT listed in a scene preset is switched OFF by it, so list the ones that should be on. Keep "values" empty unless a fixed static look is wanted.
 - Controls: {id, name, enabled, color "#rrggbb" or "" (pad light colour on controllers with RGB pads; "" = automatic), trigger:{source:"midi"|"key", kind:"note"|"cc"|"program", channel 0-16 (0 = any), number 0-127, key (lower-case KeyboardEvent.key for source "key"), mode:"toggle"|"momentary"|"on"|"off"|"fader"}, action}.
-  Control actions (field "type"): routes {routes:[ids]}, route_group {group}, bands {bands:[band ids]} (mute), blackout {}, master {} (fader = master brightness), preset {preset}, release_manual {}, channel_value {target:{rooms,groups,fixtures}, channel, min, max}, band_sensitivity {band} (fader), autopilot {} (switch the autopilot on/off).
+  Control actions (field "type"): routes {routes:[ids]}, route_group {group}, bands {bands:[band ids]} (mute), blackout {}, master {} (fader = master brightness), preset {preset}, release_manual {}, channel_value {target:{rooms,groups,fixtures}, channel, min, max}, band_sensitivity {band} (fader), autopilot {} (switch the autopilot on/off), force_section {section} (hold to play as if that section were heard).
   Faders/knobs: kind "cc", mode "fader". Pads/buttons: kind "note"; scene presets use mode "on"; momentary effects (strobe, fog blast) use "momentary".
 - Bands: {id (lower-case slug), name, enabled, ranges:[{lo_hz, hi_hz, weight}], detect:"transient"|"level", level_threshold, gain_db, sensitivity 0..1, min_gap_ms, release 0..0.98, color}. Bands are MERGED by id: reuse existing ids to retune them; new ids add bands. Never rename ids existing routes use.
 
@@ -199,8 +200,9 @@ Also choose the switching settings:
 - max_bars (0-256): change to another scene for the same section after this many bars (0 = never). Usually 16-64.
 - drop_bars (1-min_bars): a drop may replace the scene after this many bars, even before min_bars.
 - pause_s (0-600): after the DJ picks a scene by hand, wait this long before switching again.
+- rules: limits per section that apply to whatever plays, e.g. {"breakdown": {"brightness": 0.6, "strobe": false, "fog": false}}. brightness 0.1-1 caps brightness like a master fader; strobe/fog false stop strobe routes / route-driven fog. Only add rules the brief or the genre calls for; {} for none.
 Reply with ONE JSON object, no prose, no code fences:
-{"scenes": [{"id": scene id, "sections": [...]}], "min_bars": n, "max_bars": n, "drop_bars": n, "pause_s": n, "notes": 1-3 sentences on how the autopilot will play this show}"##;
+{"scenes": [{"id": scene id, "sections": [...]}], "min_bars": n, "max_bars": n, "drop_bars": n, "pause_s": n, "rules": {...}, "notes": 1-3 sentences on how the autopilot will play this show}"##;
 
 pub fn autopilot_user(show: &Show, req: &AutopilotRequest) -> String {
     let scenes: Vec<Value> = show
@@ -259,6 +261,24 @@ pub fn check_autopilot(show: &Show, raw: &Value) -> AutopilotPlan {
     st.drop_bars = st.drop_bars.clamp(1, st.min_bars);
     if st.max_bars > 0 && st.max_bars < st.min_bars {
         st.max_bars = st.min_bars;
+    }
+    if let Some(rules) = raw.get("rules").and_then(|r| r.as_object()) {
+        st.rules.clear();
+        for (sec, v) in rules {
+            let Some(sec) = SECTIONS.iter().find(|x| x.eq_ignore_ascii_case(sec)) else {
+                out.warnings.push(format!("Ignored limits for unknown section \"{sec}\""));
+                continue;
+            };
+            let d = SectionRule::default();
+            let rule = SectionRule {
+                brightness: v.get("brightness").and_then(|x| x.as_f64()).map(|x| (x as f32).clamp(0.1, 1.0)).unwrap_or(d.brightness),
+                strobe: v.get("strobe").and_then(|x| x.as_bool()).unwrap_or(d.strobe),
+                fog: v.get("fog").and_then(|x| x.as_bool()).unwrap_or(d.fog),
+            };
+            if rule != d {
+                st.rules.insert(sec.to_string(), rule);
+            }
+        }
     }
     out.notes = raw.get("notes").and_then(|x| x.as_str()).unwrap_or_default().to_string();
     let covered: HashSet<&str> = out.sections.values().flatten().map(|s| s.as_str()).chain(
@@ -378,6 +398,25 @@ fn new_ids() -> impl FnMut(&str) -> String {
         n += 1;
         format!("ai-{kind}-{tag}{n}")
     }
+}
+
+/// A motion with known kinds and sane numbers.
+fn fix_motion(m: &mut Motion) {
+    if !["sweep", "step", "random", "list", "catalog", "follow"].contains(&m.kind.as_str()) {
+        m.kind = "sweep".into();
+    }
+    if !["beat", "time", "hit"].contains(&m.clock.as_str()) {
+        m.clock = "beat".into();
+    }
+    if !["pingpong", "up", "down", "sine"].contains(&m.shape.as_str()) {
+        m.shape = "pingpong".into();
+    }
+    m.period = if m.period.is_finite() { m.period.clamp(0.05, 256.0) } else { 4.0 };
+    m.step = m.step.max(1);
+    if m.ranges.is_empty() {
+        m.ranges = vec![[0, 255]];
+    }
+    m.trigger = m.trigger.trim().to_string();
 }
 
 /// Known sections only, in a fixed order, once each.
@@ -558,7 +597,7 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
         let level = matches!(r.source.as_str(), "energy" | "level" | "phase") || r.source.ends_with(".level");
         let wants = match &r.action {
             RouteAction::Modulate { .. } => Some(true),
-            RouteAction::Strobe { .. } | RouteAction::Twinkle { .. } => None,
+            RouteAction::Strobe { .. } | RouteAction::Twinkle { .. } | RouteAction::Motion { .. } => None,
             _ => Some(false),
         };
         if let Some(want_level) = wants {
@@ -590,6 +629,9 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
             r.probability = 1.0;
         }
         r.probability = r.probability.min(1.0);
+        r.sections = clean_sections(&r.sections);
+        r.motions.values_mut().for_each(fix_motion);
+        r.scene.clear();
         match &mut r.action {
             RouteAction::Modulate { smoothing, .. } => *smoothing = smoothing.clamp(0.0, 0.98),
             RouteAction::NodeHop { palette, .. } if !palette.is_empty() => fix_palette(palette, &name, &mut warn),
@@ -616,7 +658,15 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
                 *beats = beats.clamp(0.25, 64.0);
                 *width = width.clamp(0.05, 1.0);
             }
-            RouteAction::Look { set, mode, .. } => {
+            RouteAction::Motion { motion, spread } => {
+                fix_motion(motion);
+                *spread = spread.clamp(0.0, 1.0);
+            }
+            RouteAction::Look { set, mode, rest, max_ms, hold_ms, .. } => {
+                *rest = rest.clamp(0.0, 0.9);
+                if *max_ms > 0 {
+                    *max_ms = (*max_ms).max(*hold_ms).max(500);
+                }
                 if !set.is_empty() && !look_sets.contains(set.as_str()) {
                     warn.push(format!("{name}: unknown look set, using any look"));
                     set.clear();
@@ -637,7 +687,7 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
             RouteAction::Look { .. } => fixtures.iter().any(|f| profiles.get(f.profile_id.as_str()).map(|p| !p.looks.is_empty()).unwrap_or(false)),
             _ => fixtures.iter().any(|f| !channel_keys(&profiles, f, &r.channel).is_empty()),
         };
-        if !reaches {
+        if !reaches && r.switches.is_empty() {
             warn.push(format!("Skipped route \"{name}\": no targeted fixture has what it drives{}", if r.channel.is_empty() { String::new() } else { format!(" ({})", r.channel) }));
             continue;
         }
@@ -648,6 +698,25 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
     }
     let existing_routes: HashSet<&str> = show.routes.iter().map(|r| r.id.as_str()).collect();
     let map_route = |rid: &str| route_map.get(rid).cloned().or_else(|| existing_routes.contains(rid).then(|| rid.to_string()));
+    // Switches point at routes in the plan (by their new ids) or already in the show.
+    for r in &mut plan.routes {
+        let me = r.id.clone();
+        let rname = r.name.clone();
+        r.switches.retain_mut(|sw| match map_route(&sw.route).filter(|n| *n != me) {
+            Some(n) => {
+                sw.route = n;
+                if !["on", "off", "toggle"].contains(&sw.to.as_str()) {
+                    sw.to = "on".into();
+                }
+                sw.beats = if sw.beats.is_finite() { sw.beats.clamp(0.0, 1024.0) } else { 4.0 };
+                true
+            }
+            None => {
+                warn.push(format!("{rname}: it switches a route that doesn't exist; left out"));
+                false
+            }
+        });
+    }
     let route_groups: HashSet<String> = show.routes.iter().map(|r| r.group.clone()).chain(plan.routes.iter().map(|r| r.group.clone())).collect();
 
     // ---- presets
@@ -660,8 +729,23 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
         if p.name.trim().is_empty() {
             p.name = "AI scene".into();
         }
-        p.values.retain(|pv| {
+        let chan_ok = |pv: &PresetValue| {
             show.fixtures.iter().find(|f| f.id == pv.fixture).map(|f| !channel_keys(&profiles, f, &pv.channel).is_empty()).unwrap_or(false)
+        };
+        p.values.retain(chan_ok);
+        p.base.retain(chan_ok);
+        let pname = p.name.clone();
+        p.looks.retain_mut(|sl| {
+            sl.target.fixtures.retain(|f| fixture_ids.contains(f.as_str()));
+            sl.target.groups.retain(|g| group_ids.contains(g.as_str()));
+            sl.target.rooms.retain(|x| room_ids.contains(x.as_str()));
+            let found = resolve_fixtures(show, &sl.target.rooms, &sl.target.groups, &sl.target.fixtures).iter().any(|f| {
+                profiles.get(f.profile_id.as_str()).is_some_and(|pr| pr.looks.iter().any(|l| l.id == sl.look || l.name == sl.look))
+            });
+            if !found {
+                warn.push(format!("{pname}: no fixture has the look \"{}\"; left out", sl.look));
+            }
+            found
         });
         let mut routes = BTreeMap::new();
         for (rid, on) in std::mem::take(&mut p.routes) {
@@ -676,7 +760,7 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
             }
         }
         p.routes = routes;
-        if p.values.is_empty() && p.routes.is_empty() {
+        if p.values.is_empty() && p.routes.is_empty() && p.looks.is_empty() && p.base.is_empty() {
             warn.push(format!("Skipped preset \"{}\": it doesn't change anything that exists", p.name));
             continue;
         }
@@ -688,6 +772,13 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
         preset_map.insert(p.id.clone(), new.clone());
         p.id = new;
         plan.presets.push(p);
+    }
+    // A route switched on by exactly one scene belongs to it (deleting the scene removes it).
+    for r in &mut plan.routes {
+        let owners: Vec<&Preset> = plan.presets.iter().filter(|p| p.routes.get(&r.id) == Some(&true)).collect();
+        if owners.len() == 1 {
+            r.scene = owners[0].id.clone();
+        }
     }
     let existing_presets: HashSet<&str> = show.presets.iter().map(|p| p.id.as_str()).collect();
 
@@ -757,6 +848,7 @@ pub fn sanitize(show: &Show, raw: &Value) -> (Plan, Vec<String>) {
             }
             ControlAction::BandSensitivity { band } => band_ids.contains(band.as_str()),
             ControlAction::Blackout {} | ControlAction::Master {} | ControlAction::ReleaseManual {} | ControlAction::Autopilot {} => true,
+            ControlAction::ForceSection { section } => SECTIONS.contains(&section.as_str()),
         };
         if !c.color.is_empty() && !hex_ok(&c.color) {
             c.color.clear();
@@ -803,6 +895,27 @@ mod tests {
         s.groups.push(FixtureGroup { id: "g1".into(), name: "Pars".into(), fixtures: vec!["a".into(), "b".into()], ..Default::default() });
         s.migrate();
         s
+    }
+
+    #[test]
+    fn route_switches_are_linked_to_the_new_ids() {
+        let show = rig();
+        let raw = json!({
+            "routes": [
+                {"id": "strobe", "name": "Strobe", "source": "beat", "groups": ["g1"], "channel": "dimmer", "action": {"type": "cycle", "values": [0, 255]}},
+                {"id": "build", "name": "Build", "source": "bar", "groups": [], "channel": "",
+                 "action": {"type": "cycle", "values": [0]},
+                 "switches": [{"route": "strobe", "to": "sideways", "beats": 8}, {"route": "ghost", "to": "on"}, {"route": "build"}],
+                 "motions": {"dimmer": {"kind": "sweep", "trigger": " snare "}}}
+            ]
+        });
+        let (plan, warn) = sanitize(&show, &raw);
+        assert_eq!(plan.routes.len(), 2, "a route that only switches others is kept: {warn:?}");
+        let sw = &plan.routes[1].switches;
+        assert_eq!(sw.len(), 1, "unknown routes and itself are left out");
+        assert_eq!((sw[0].route.as_str(), sw[0].to.as_str(), sw[0].beats), (plan.routes[0].id.as_str(), "on", 8.0));
+        assert_eq!(plan.routes[1].motions["dimmer"].trigger, "snare");
+        assert!(warn.iter().any(|w| w.contains("doesn't exist")));
     }
 
     #[test]
@@ -908,6 +1021,7 @@ mod tests {
             RouteAction::Wave { .. } => "wave",
             RouteAction::Cycle { .. } => "cycle",
             RouteAction::Look { .. } => "look",
+            RouteAction::Motion { .. } => "motion",
         }
     }
 
@@ -923,6 +1037,7 @@ mod tests {
             ControlAction::ChannelValue { .. } => "channel_value",
             ControlAction::BandSensitivity { .. } => "band_sensitivity",
             ControlAction::Autopilot {} => "autopilot",
+            ControlAction::ForceSection { .. } => "force_section",
         }
     }
 
@@ -937,7 +1052,8 @@ mod tests {
             RouteAction::Twinkle { palette: String::new(), amount: 1.0, decay_ms: 100, base: 0 },
             RouteAction::Wave { palette: String::new(), axis: "x".into(), beats: 4.0, width: 0.3, base: 0 },
             RouteAction::Cycle { values: vec![] },
-            RouteAction::Look { set: String::new(), include_defaults: true, tags: vec![], mode: "random".into(), hold_ms: 0, heads: vec![] },
+            RouteAction::Motion { motion: Motion::default(), spread: 0.0 },
+            RouteAction::Look { set: String::new(), include_defaults: true, tags: vec![], mode: "random".into(), hold_ms: 0, heads: vec![], looks: vec![], follow_section: false, max_ms: 0, rest: 0.0, rest_ms: 0 },
         ]
     }
 
@@ -953,6 +1069,7 @@ mod tests {
             ControlAction::ChannelValue { target: Target::default(), channel: String::new(), min: 0, max: 0 },
             ControlAction::BandSensitivity { band: String::new() },
             ControlAction::Autopilot {},
+            ControlAction::ForceSection { section: String::new() },
         ]
     }
 
@@ -983,12 +1100,50 @@ mod tests {
         assert!(plan.warnings.iter().any(|w| w.contains("nope")));
         assert!(plan.warnings.iter().any(|w| w.contains("unknown sections")));
         assert_eq!(plan.notes, "Plays itself.");
+        let plan = check_autopilot(&show, &json!({"rules": {"Breakdown": {"brightness": 0.0, "strobe": false}, "drop": {}, "chorus": {"fog": false}}}));
+        assert_eq!(plan.settings.rules.len(), 1, "a rule that changes nothing is dropped");
+        assert_eq!(plan.settings.rules["breakdown"], SectionRule { brightness: 0.1, strobe: false, fog: true });
+        assert!(plan.warnings.iter().any(|w| w.contains("chorus")));
         // missing numbers keep the current settings; uncovered sections are pointed out
         let plan = check_autopilot(&show, &json!({"scenes": []}));
         assert_eq!(plan.settings, show.autopilot);
         assert!(plan.warnings.iter().any(|w| w.contains("breakdown, build, drop")), "{:?}", plan.warnings);
         let user = autopilot_user(&show, &AutopilotRequest { prompt: "long builds".into(), genre: None });
         assert!(user.contains("\"Chill\"") && user.contains("long builds"));
+    }
+
+    #[test]
+    fn routes_get_sections_and_their_scene() {
+        let show = rig();
+        let raw = json!({
+            "routes": [
+                {"id": "r1", "name": "Drop strobe", "source": "kick", "groups": [], "channel": "@intensity", "sections": ["drop", "nope"], "action": {"type": "flash", "on": 255, "off": 0, "decay_ms": 100}},
+                {"id": "r2", "name": "Shared", "source": "kick", "channel": "@intensity", "scene": "x", "action": {"type": "flash", "on": 255, "off": 0, "decay_ms": 100}}
+            ],
+            "presets": [{"id": "p1", "name": "A", "routes": {"r1": true, "r2": true}}, {"id": "p2", "name": "B", "routes": {"r2": true}}]
+        });
+        let (plan, _) = sanitize(&show, &raw);
+        assert_eq!(plan.routes.len(), 2, "{:?}", plan.routes.iter().map(|r| &r.name).collect::<Vec<_>>());
+        assert_eq!(plan.routes[0].sections, ["drop"]);
+        assert_eq!(plan.routes[0].scene, plan.presets[0].id, "only scene A turns it on");
+        assert_eq!(plan.routes[1].scene, "", "two scenes use it: nobody owns it");
+    }
+
+    #[test]
+    fn scene_looks_must_exist_on_their_fixtures() {
+        let mut show = rig();
+        let fx = show.fixtures[0].clone();
+        let pr = show.profiles.iter_mut().find(|p| p.id == fx.profile_id).unwrap();
+        pr.looks.push(Look { id: "l1".into(), name: "Calm".into(), ..Default::default() });
+        let look = "Calm".to_string();
+        let raw = json!({"presets": [
+            {"id": "p1", "name": "Calm", "routes": {}, "looks": [{"target": {}, "look": look}, {"target": {}, "look": "Nope"}]},
+            {"id": "p2", "name": "Empty", "routes": {}, "looks": [{"target": {}, "look": "Nope"}]}
+        ]});
+        let (plan, warn) = sanitize(&show, &raw);
+        assert_eq!(plan.presets.len(), 1, "a scene whose only look doesn't exist is skipped");
+        assert_eq!(plan.presets[0].looks.len(), 1);
+        assert!(warn.iter().any(|w| w.contains("Nope")));
     }
 
     #[test]
@@ -1013,7 +1168,7 @@ mod tests {
     #[test]
     fn prompt_documents_every_action_and_field() {
         let routes = all_route_actions();
-        assert_eq!(routes.len(), 10);
+        assert_eq!(routes.len(), 11);
         for a in &routes {
             let t = route_type(a);
             assert!(SYSTEM.contains(&format!("\n  {t} {{")), "route action `{t}` is missing from the prompt");
@@ -1027,8 +1182,11 @@ mod tests {
             let v = serde_json::to_value(a).unwrap();
             assert_documented(t, &v, &["type"]);
         }
-        assert_documented("route", &serde_json::to_value(Route::default()).unwrap(), &["action"]);
-        assert_documented("preset", &serde_json::to_value(Preset::default()).unwrap(), &[]);
+        assert_documented("route", &serde_json::to_value(Route::default()).unwrap(), &["action", "scene"]);
+        assert_documented("route switch", &serde_json::to_value(RouteSwitch::default()).unwrap(), &[]);
+        assert_documented("motion", &serde_json::to_value(Motion::default()).unwrap(), &[]);
+        assert_documented("preset", &serde_json::to_value(Preset::default()).unwrap(), &["blocks"]);
+        assert_documented("scene look", &serde_json::to_value(SceneLook::default()).unwrap(), &[]);
         assert_documented("control", &serde_json::to_value(ControlMapping::default()).unwrap(), &["action"]);
         assert_documented("trigger", &serde_json::to_value(ControlTrigger::default()).unwrap(), &[]);
         assert_documented("band", &serde_json::to_value(BandDef::default()).unwrap(), &[]);

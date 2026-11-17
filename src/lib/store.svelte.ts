@@ -19,11 +19,15 @@ export const app = $state({
   epoch: 0,
   master: 1,
   activePresets: [] as string[],
+  /** The scene playing: its looks are the layer under the routes. */
+  scene: null as string | null,
   /** Last control mapping that fired + when (for flashing it in the UI). */
   fired: { id: "", at: 0 },
   midiLog: [] as (MidiEvent & { at: number })[],
   /** A mapping waiting for MIDI/key learn; global key handling pauses meanwhile. */
   learning: null as string | null,
+  /** When Learn started; MIDI received before this doesn't count. */
+  learnStarted: 0,
   /** What the autopilot hears and plays; updated every bar. */
   autopilot: null as AutopilotStatus | null,
 });
@@ -137,7 +141,9 @@ export async function setManual(fixture: string, channel: string, value: number 
   if (value === null) {
     if (app.manual[fixture]) delete app.manual[fixture][channel];
   } else {
-    (app.manual[fixture] ??= {})[channel] = value;
+    // (assign, then write through the store: writing onto the `??=` result misses the reactive copy)
+    app.manual[fixture] ??= {};
+    app.manual[fixture][channel] = value;
   }
   await invoke("set_manual", { fixture, channel, value });
 }
@@ -224,6 +230,7 @@ export function applyControlState(cs: ControlState) {
   app.master = cs.master;
   app.manual = cs.manual;
   app.activePresets = cs.active_presets;
+  app.scene = cs.scene ?? null;
   if (app.autopilot && cs.autopilot !== undefined) app.autopilot.running = cs.autopilot;
   if (cs.fired) app.fired = { id: cs.fired, at: Date.now() };
 }
@@ -232,4 +239,10 @@ export function applyControlState(cs: ControlState) {
 export function fixtureHasChannel(f: Fixture, channel: string) {
   const chans = modeChannels(f);
   return channel.startsWith("@") ? chans.some((c) => c.group === channel.slice(1)) : chans.some((c) => c.key === channel);
+}
+
+/** Start (or cancel) Learn for a control: the next pad, knob or key sets its trigger. */
+export function startLearn(id: string) {
+  app.learning = app.learning === id ? null : id;
+  app.learnStarted = Date.now();
 }

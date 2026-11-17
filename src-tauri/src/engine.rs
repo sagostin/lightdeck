@@ -6,7 +6,7 @@ use crate::model::*;
 use crate::zigbee::{self, Zigbee};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -26,6 +26,16 @@ pub struct Engine {
     /// Entries the UI stops refreshing expire after PREVIEW_TTL, so a reload or crash
     /// mid-preview can never leave a fixture stuck on it.
     pub preview: Arc<Mutex<HashMap<String, (Look, Instant, Instant)>>>,
+    /// The section playing now (index into `SECTIONS`), set by the autopilot's detector
+    /// or a force-section pad. Routes with sections run only in theirs.
+    pub section: Arc<AtomicU8>,
+    /// The scene playing (recalled last) and when: its looks and base values are the
+    /// layer underneath the routes.
+    pub scene: Arc<Mutex<Option<(String, Instant)>>>,
+    /// Fixtures open in the pattern browser, and when the UI last said so. While open,
+    /// routes and the scene leave them alone, so only what you set there shows. Entries the
+    /// UI stops refreshing expire after PREVIEW_TTL, like previews.
+    pub browsing: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -35,6 +45,8 @@ pub struct Frame {
     pub fixtures: HashMap<String, Vec<u8>>,
     pub blackout: bool,
     pub send_errors: Vec<String>,
+    /// Routes another route has switched for now: route id -> on.
+    pub switched: HashMap<String, bool>,
 }
 
 #[derive(Default)]
@@ -59,6 +71,57 @@ struct RouteState {
     looks: HashMap<String, (String, Instant, Instant, u64)>,
     accum: f32,
     last_tick: Option<Instant>,
+    /// Beat position (beats + phase) when the route last fired.
+    fire_beat: f32,
+    /// "Also move" channels with a trigger of their own: channel -> its hits.
+    side: HashMap<String, Hits>,
+}
+
+/// Hits of a sound, tracked for a route or one of its channels.
+#[derive(Default)]
+struct Hits {
+    last_counter: u64,
+    last_level: f32,
+    events: u64,
+    last: Option<Instant>,
+    beat: f32,
+}
+
+/// A route switched on or off by another route, until `until` (None = until changed).
+/// `base` is the route's own on/off when it was switched: if that changes (a scene, or
+/// you), the switch is dropped.
+struct Switched {
+    on: bool,
+    until: Option<Instant>,
+    base: bool,
+}
+
+/// Did the sound fire since the last frame? Hits: the counter moved. Levels: rose past 60%.
+fn detect(src: &str, feat: &Features, last_counter: &mut u64, last_level: &mut f32) -> bool {
+    if let Some(c) = source_counter(src, feat) {
+        if c != *last_counter {
+            let t = *last_counter != 0 || c == 1;
+            *last_counter = c;
+            return t;
+        }
+        false
+    } else if let Some(l) = source_level(src, feat) {
+        let t = l > 0.6 && *last_level <= 0.6;
+        *last_level = l;
+        t
+    } else {
+        false
+    }
+}
+
+/// Keep up with a sound without firing (a route that isn't running), so it doesn't fire
+/// on a stale hit the moment it starts.
+fn follow(src: &str, feat: &Features, last_counter: &mut u64, last_level: &mut f32) {
+    if let Some(c) = source_counter(src, feat) {
+        *last_counter = c.max(1);
+    } else if let Some(l) = source_level(src, feat) {
+        *last_level = l;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -76,6 +139,9 @@ struct Runtime {
     held: HashMap<Key, (u8, Instant)>, // random picks: value until
     last_out: HashMap<Key, (u8, Instant)>,
     clock: Option<Instant>,
+    switched: HashMap<String, Switched>,
+    /// Fixtures open in the pattern browser this frame.
+    browsing: std::collections::HashSet<String>,
 }
 
 impl Engine {
@@ -84,12 +150,15 @@ impl Engine {
         let blackout = Arc::new(AtomicBool::new(false));
         let master = Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits()));
         let preview = Arc::new(Mutex::new(HashMap::new()));
-        let (s, m, b, ms, pv) = (show.clone(), manual.clone(), blackout.clone(), master.clone(), preview.clone());
+        let section = Arc::new(AtomicU8::new(1)); // groove
+        let scene = Arc::new(Mutex::new(None));
+        let browsing = Arc::new(Mutex::new(HashMap::new()));
+        let (s, m, b, ms, pv, sec, sc, br) = (show.clone(), manual.clone(), blackout.clone(), master.clone(), preview.clone(), section.clone(), scene.clone(), browsing.clone());
         std::thread::Builder::new()
             .name("engine".into())
-            .spawn(move || run(app, s, features, m, b, ms, pv, zb))
+            .spawn(move || run(app, s, features, m, b, ms, pv, sec, sc, br, zb))
             .expect("spawn engine");
-        Self { show, manual, blackout, master, preview }
+        Self { show, manual, blackout, master, preview, section, scene, browsing }
     }
 }
 
@@ -101,6 +170,9 @@ fn run(
     blackout: Arc<AtomicBool>,
     master: Arc<std::sync::atomic::AtomicU32>,
     preview: Arc<Mutex<HashMap<String, (Look, Instant, Instant)>>>,
+    section: Arc<AtomicU8>,
+    scene: Arc<Mutex<Option<(String, Instant)>>>,
+    browsing: Arc<Mutex<HashMap<String, Instant>>>,
     zb: Arc<Zigbee>,
 ) {
     let mut sender = ArtNetSender::new().ok();
@@ -118,11 +190,19 @@ fn run(
             p.retain(|_, (_, _, seen)| seen.elapsed() < PREVIEW_TTL);
             p.iter().map(|(k, (l, started, _))| (k.clone(), (l.clone(), *started))).collect()
         };
+        rt.browsing = {
+            let mut b = browsing.lock().unwrap();
+            b.retain(|_, seen| seen.elapsed() < PREVIEW_TTL);
+            b.keys().cloned().collect()
+        };
         let (universes, fixtures_out) = {
             let show = show.read().unwrap();
             let m = f32::from_bits(master.load(Ordering::Relaxed)).clamp(0.0, 1.0);
-            compute(&show, &feat, &manual_now, &preview_now, bo, m, &mut rt)
+            let sec = SECTIONS.get(section.load(Ordering::Relaxed) as usize).copied().unwrap_or("groove");
+            let sc = scene.lock().unwrap().clone();
+            compute(&show, &feat, &manual_now, &preview_now, bo, m, sec, sc.as_ref().map(|(id, t)| (id.as_str(), *t)), &mut rt)
         };
+        let switched: HashMap<String, bool> = rt.switched.iter().map(|(k, v)| (k.clone(), v.on)).collect();
         zb.set_desired(zigbee_states(&show.read().unwrap(), &fixtures_out));
         let mut send_errors = vec![];
         if let Some(s) = sender.as_mut() {
@@ -140,7 +220,7 @@ fn run(
         if tick % 2 == 0 {
             let _ = app.emit(
                 "frame",
-                Frame { features: feat, fixtures: fixtures_out, blackout: bo, send_errors },
+                Frame { features: feat, fixtures: fixtures_out, blackout: bo, send_errors, switched },
             );
         }
         let now = Instant::now();
@@ -185,9 +265,13 @@ fn compute(
     preview: &HashMap<String, (Look, Instant)>,
     blackout: bool,
     master: f32,
+    section: &str,
+    scene: Option<(&str, Instant)>,
     rt: &mut Runtime,
 ) -> (HashMap<String, [u8; 512]>, HashMap<String, Vec<u8>>) {
     let now = Instant::now();
+    let rule = show.autopilot.rules.get(section).cloned().unwrap_or_default();
+    let master = master * rule.brightness.clamp(0.0, 1.0);
     let profiles: HashMap<&str, &Profile> = show.profiles.iter().map(|p| (p.id.as_str(), p)).collect();
 
     // 1. defaults
@@ -201,10 +285,56 @@ fn compute(
         }
     }
 
+    // 1b. the playing scene's looks and base values, underneath the routes
+    if let Some(p) = scene.and_then(|(id, _)| show.presets.iter().find(|p| p.id == id)) {
+        let ctx = MotionCtx { feat, secs: scene.map(|(_, t)| now.duration_since(t).as_secs_f32()).unwrap_or(0.0), hits: feat.beats, offset: 0.0, since_hit: None };
+        for sl in &p.looks {
+            for fx in resolve_fixtures(show, &sl.target.rooms, &sl.target.groups, &sl.target.fixtures) {
+                let Some(pr) = profiles.get(fx.profile_id.as_str()) else { continue };
+                let Some(m) = pr.mode(&fx.mode) else { continue };
+                let Some(look) = pr.looks.iter().find(|l| l.id == sl.look).or_else(|| pr.looks.iter().find(|l| l.name == sl.look)) else { continue };
+                let heads: Vec<&str> = if sl.heads.is_empty() { vec![look.head.as_str()] } else { sl.heads.iter().map(|h| h.as_str()).collect() };
+                for head in heads {
+                    for (k, base, motion) in look_values(m, look, head) {
+                        let key = (fx.id.clone(), k.clone());
+                        if values.contains_key(&key) {
+                            let v = motion.map(|mo| motion_value(&mo, base, &ctx, &catalog(pr, &k, &mo))).unwrap_or(base);
+                            values.insert(key, v);
+                        }
+                    }
+                }
+            }
+        }
+        for v in &p.base {
+            let key = (v.fixture.clone(), v.channel.clone());
+            if values.contains_key(&key) {
+                values.insert(key, v.value);
+            }
+        }
+    }
+
     // 2. routes
     let clock = *rt.clock.get_or_insert(now);
-    for route in show.routes.iter().filter(|r| r.enabled) {
+    // Switches that ran out, or whose route was changed by a scene or by hand, end.
+    rt.switched.retain(|id, sw| {
+        sw.until.map_or(true, |u| u > now) && show.routes.iter().any(|r| &r.id == id && r.enabled == sw.base)
+    });
+    for route in &show.routes {
+        let enabled = rt.switched.get(&route.id).map(|sw| sw.on).unwrap_or(route.enabled);
+        let runs = enabled
+            && (route.sections.is_empty() || route.sections.iter().any(|s| s == section))
+            && (rule.strobe || !matches!(route.action, RouteAction::Strobe { .. }));
         let st = rt.routes.entry(route.id.clone()).or_default();
+        if !runs {
+            follow(&route.source, feat, &mut st.last_counter, &mut st.last_level);
+            for (k, mo) in &route.motions {
+                if !mo.trigger.is_empty() {
+                    let h = st.side.entry(k.clone()).or_default();
+                    follow(&mo.trigger, feat, &mut h.last_counter, &mut h.last_level);
+                }
+            }
+            continue;
+        }
         let is_effect = matches!(
             route.action,
             RouteAction::Strobe { .. } | RouteAction::Palette { .. } | RouteAction::Twinkle { .. } | RouteAction::Wave { .. }
@@ -228,7 +358,8 @@ fn compute(
         } else {
             vec![]
         };
-        if targets.is_empty() && fx_targets.is_empty() && look_targets.is_empty() {
+        // (a route that only switches other routes needs no fixtures of its own)
+        if targets.is_empty() && fx_targets.is_empty() && look_targets.is_empty() && route.switches.is_empty() {
             continue;
         }
         let dt = st.last_tick.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0).min(0.2);
@@ -251,16 +382,7 @@ fn compute(
         };
 
         // trigger detection
-        let mut triggered = false;
-        if let Some(c) = source_counter(&route.source, feat) {
-            if c != st.last_counter {
-                triggered = st.last_counter != 0 || c == 1;
-                st.last_counter = c;
-            }
-        } else if let Some(l) = source_level(&route.source, feat) {
-            triggered = l > 0.6 && st.last_level <= 0.6;
-            st.last_level = l;
-        }
+        let mut triggered = detect(&route.source, feat, &mut st.last_counter, &mut st.last_level);
         if triggered {
             st.events += 1;
             let every = route.every.max(1) as u64;
@@ -272,8 +394,30 @@ fn compute(
             triggered = st.events % every == 0 && cooled && fastrand::f32() <= prob;
             if triggered {
                 st.last_fire = Some(now);
+                st.fire_beat = feat.beats as f32 + feat.beat_phase;
             }
         }
+
+        // switch other routes on, off or over
+        if triggered {
+            let beat_secs = 60.0 / if feat.bpm > 1.0 { feat.bpm } else { 120.0 };
+            for sw in &route.switches {
+                let Some(other) = show.routes.iter().find(|r| r.id == sw.route && r.id != route.id) else { continue };
+                let cur = rt.switched.get(&other.id).map(|x| x.on).unwrap_or(other.enabled);
+                let on = match sw.to.as_str() {
+                    "off" => false,
+                    "toggle" => !cur,
+                    _ => true,
+                };
+                let until = (sw.beats > 0.0).then(|| now + Duration::from_secs_f32(sw.beats * beat_secs));
+                if on == other.enabled && until.is_none() {
+                    rt.switched.remove(&other.id); // back to how it's saved
+                } else {
+                    rt.switched.insert(other.id.clone(), Switched { on, until, base: other.enabled });
+                }
+            }
+        }
+        let st = rt.routes.get_mut(&route.id).unwrap();
 
         let pairs = || targets.iter().flat_map(|(fx, keys)| keys.iter().map(move |k| (*fx, k)));
         match &route.action {
@@ -288,6 +432,30 @@ fn compute(
                     *s = *s * a + lvl * (1.0 - a);
                     let v = *min as f32 + (*max as f32 - *min as f32) * *s;
                     values.insert((fx.id.clone(), key.clone()), v.round().clamp(0.0, 255.0) as u8);
+                }
+            }
+            RouteAction::Motion { motion, spread } => {
+                let ps: Vec<_> = pairs().collect();
+                // chase in fixture order: one offset per fixture, not per channel
+                let order: Vec<&str> = {
+                    let mut ids: Vec<&str> = vec![];
+                    for (fx, _) in &ps {
+                        if !ids.contains(&fx.id.as_str()) {
+                            ids.push(fx.id.as_str());
+                        }
+                    }
+                    ids
+                };
+                let n = order.len().max(1) as f32;
+                let secs = now.duration_since(clock).as_secs_f32();
+                for (fx, key) in ps {
+                    let i = order.iter().position(|x| *x == fx.id).unwrap_or(0) as f32;
+                    let k = (fx.id.clone(), key.clone());
+                    let base = values.get(&k).copied().unwrap_or(0);
+                    let since_hit = st.last_fire.map(|t| (now.duration_since(t).as_secs_f32(), (feat.beats as f32 + feat.beat_phase - st.fire_beat).max(0.0)));
+                    let ctx = MotionCtx { feat, secs, hits: st.events, offset: spread.clamp(0.0, 1.0) * i / n, since_hit };
+                    let p = profiles[fx.profile_id.as_str()];
+                    values.insert(k, motion_value(motion, base, &ctx, &catalog(p, key, motion)));
                 }
             }
             RouteAction::Flash { on, off, decay_ms } => {
@@ -447,24 +615,37 @@ fn compute(
                     set_color(&mut values, &fx.id, lc, cols[cycle % cols.len()]);
                 }
             }
-            RouteAction::Look { set, include_defaults, tags, mode, hold_ms, heads } => {
+            RouteAction::Look { set, include_defaults, tags, mode, hold_ms, heads, looks, follow_section, max_ms, rest, rest_ms } => {
                 if triggered {
                     st.cycle_idx = st.cycle_idx.wrapping_add(1);
                 }
                 for fx in &look_targets {
                     let p = profiles[fx.profile_id.as_str()];
-                    let held = st.looks.get(&fx.id).map(|(_, until, _, _)| now < *until).unwrap_or(false);
-                    if triggered && !held {
-                        let cands: Vec<&Look> = p
-                            .looks
-                            .iter()
-                            .filter(|l| set.is_empty() || l.sets.contains(set))
-                            .filter(|l| *include_defaults || !l.builtin)
-                            .filter(|l| tags.iter().all(|t| l.tags.contains(t)))
-                            .collect();
-                        if !cands.is_empty() {
+                    let cands: Vec<&Look> = p
+                        .looks
+                        .iter()
+                        .filter(|l| set.is_empty() || l.sets.contains(set))
+                        .filter(|l| *include_defaults || !l.builtin)
+                        .filter(|l| tags.iter().all(|t| l.tags.contains(t)))
+                        .filter(|l| looks.is_empty() || looks.iter().any(|x| x == &l.id || x == &l.name))
+                        .collect();
+                    // Following the section: looks tagged for it, when there are any.
+                    let in_section: Vec<&Look> = if *follow_section { cands.iter().copied().filter(|l| l.tags.iter().any(|t| t == section)).collect() } else { vec![] };
+                    let cands = if in_section.is_empty() { cands } else { in_section };
+                    let cur = st.looks.get(&fx.id).cloned();
+                    let resting = cur.as_ref().is_some_and(|(id, ..)| id.is_empty());
+                    let held = cur.as_ref().is_some_and(|(_, until, ..)| now < *until);
+                    let too_long = *max_ms > 0 && !resting && cur.as_ref().is_some_and(|(_, _, started, _)| now.duration_since(*started).as_millis() >= *max_ms as u128);
+                    let rest_over = resting && *rest_ms > 0 && !held;
+                    let wrong_section = !held && !resting && *follow_section && cur.as_ref().is_some_and(|(id, ..)| !cands.iter().any(|l| &l.id == id));
+                    if ((triggered && !held) || too_long || rest_over || wrong_section) && !cands.is_empty() {
+                        if *rest > 0.0 && !resting && !wrong_section && cur.is_some() && fastrand::f32() < *rest {
+                            st.looks.insert(fx.id.clone(), (String::new(), now + Duration::from_millis(*rest_ms as u64), now, st.events));
+                        } else {
                             let pick = if mode == "cycle" {
-                                cands[st.cycle_idx % cands.len()]
+                                // the look after the current one (or where the route's count is, to start)
+                                let at = cur.as_ref().and_then(|(id, ..)| cands.iter().position(|l| &l.id == id));
+                                cands[at.map(|i| i + 1).unwrap_or(st.cycle_idx) % cands.len()]
                             } else {
                                 let w: Vec<f32> = cands.iter().map(|l| l.rating.max(1) as f32).collect();
                                 cands[weighted_pick(&w)]
@@ -479,7 +660,7 @@ fn compute(
                     else {
                         continue;
                     };
-                    let ctx = MotionCtx { feat, secs: now.duration_since(started).as_secs_f32(), hits: st.events - hits0 };
+                    let ctx = MotionCtx { feat, secs: now.duration_since(started).as_secs_f32(), hits: st.events - hits0, offset: 0.0, since_hit: None };
                     let Some(m) = p.mode(&fx.mode) else { continue };
                     let dest: Vec<&str> = if heads.is_empty() { vec![look.head.as_str()] } else { heads.iter().map(|h| h.as_str()).collect() };
                     for head in dest {
@@ -490,6 +671,7 @@ fn compute(
                             }
                         }
                     }
+
                 }
             }
             RouteAction::Random { tags, hold_ms } => {
@@ -518,6 +700,68 @@ fn compute(
                 }
             }
         }
+
+        // other channels the route also moves (e.g. zoom sweeping open on each kick)
+        if !route.motions.is_empty() {
+            let beat_now = feat.beats as f32 + feat.beat_phase;
+            let own = MotionCtx {
+                feat,
+                secs: now.duration_since(clock).as_secs_f32(),
+                hits: st.events,
+                offset: 0.0,
+                since_hit: st.last_fire.map(|t| (now.duration_since(t).as_secs_f32(), (beat_now - st.fire_beat).max(0.0))),
+            };
+            // channels with a trigger of their own count and restart on its hits
+            let mut ctxs: HashMap<&str, MotionCtx> = HashMap::new();
+            for (key, mo) in &route.motions {
+                if mo.trigger.is_empty() || mo.trigger == route.source {
+                    continue;
+                }
+                let h = st.side.entry(key.clone()).or_default();
+                if detect(&mo.trigger, feat, &mut h.last_counter, &mut h.last_level) {
+                    h.events += 1;
+                    h.last = Some(now);
+                    h.beat = beat_now;
+                }
+                let since_hit = h.last.map(|t| (now.duration_since(t).as_secs_f32(), (beat_now - h.beat).max(0.0)));
+                ctxs.insert(key.as_str(), MotionCtx { hits: h.events, since_hit, ..own });
+            }
+            for fx in resolve_fixtures(show, &route.rooms, &route.groups, &route.fixtures) {
+                let Some(p) = profiles.get(fx.profile_id.as_str()) else { continue };
+                for (key, mo) in &route.motions {
+                    let ctx = ctxs.get(key.as_str()).unwrap_or(&own);
+                    for k in channel_keys(&profiles, fx, key) {
+                        let kk = (fx.id.clone(), k.clone());
+                        if let Some(base) = values.get(&kk).copied() {
+                            values.insert(kk, motion_value(mo, base, &ctx, &catalog(p, &k, mo)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2a. sections that allow no fog: routes leave fog channels at their defaults
+    if !rule.fog {
+        for fx in &show.fixtures {
+            let Some(p) = profiles.get(fx.profile_id.as_str()) else { continue };
+            let Some(mode) = p.mode(&fx.mode) else { continue };
+            for key in &mode.channels {
+                if let Some(ch) = p.channel(key).filter(|c| c.group == "fog") {
+                    values.insert((fx.id.clone(), key.clone()), ch.default);
+                }
+            }
+        }
+    }
+
+    // 2a'. fixtures open in the pattern browser: back to their defaults, so routes and the
+    // scene don't move them; only the browser's preview and values (below) show
+    for fx in show.fixtures.iter().filter(|f| rt.browsing.contains(&f.id)) {
+        let Some(p) = profiles.get(fx.profile_id.as_str()) else { continue };
+        let Some(mode) = p.mode(&fx.mode) else { continue };
+        for key in &mode.channels {
+            values.insert((fx.id.clone(), key.clone()), p.channel(key).map(|c| c.default).unwrap_or(0));
+        }
     }
 
     // 2b. looks being previewed in the pattern browser
@@ -527,7 +771,7 @@ fn compute(
         let Some(m) = p.mode(&fx.mode) else { continue };
         let secs = now.duration_since(*started).as_secs_f32();
         // In preview there's no route firing, so "hit" clocks step on each beat.
-        let ctx = MotionCtx { feat, secs, hits: feat.beats };
+        let ctx = MotionCtx { feat, secs, hits: feat.beats, offset: 0.0, since_hit: None };
         for (k, base, motion) in look_values(m, look, &look.head) {
             if values.contains_key(&(fx.id.clone(), k.clone())) {
                 let v = motion.map(|mo| motion_value(&mo, base, &ctx, &catalog(p, &k, &mo))).unwrap_or(base);
@@ -841,7 +1085,7 @@ mod tests {
         s
     }
     fn run_once(s: &Show, feat: &Features, rt: &mut Runtime) -> HashMap<String, Vec<u8>> {
-        compute(s, feat, &HashMap::new(), &HashMap::new(), false, 1.0, rt).1
+        compute(s, feat, &HashMap::new(), &HashMap::new(), false, 1.0, "groove", None, rt).1
     }
 
     #[test]
@@ -855,6 +1099,54 @@ mod tests {
         assert_eq!(out["a"][0], 255);
         assert_ne!(out["a"][1..4], out["c"][1..4]);
         assert_eq!(out["a"][1..4], [0xff, 0x00, 0x40]); // first club colour, leftmost fixture
+    }
+
+    #[test]
+    fn the_playing_scene_sets_looks_and_values_under_the_routes() {
+        let mut s = laser_show();
+        let look = s.profiles[0].looks.first().cloned().expect("laser has looks");
+        let (key, val) = look.values.iter().next().map(|(k, v)| (k.clone(), *v)).unwrap();
+        let fx = s.fixtures[0].id.clone();
+        s.presets.push(Preset {
+            id: "sc".into(), name: "Calm".into(),
+            looks: vec![SceneLook { target: Target::default(), look: look.name.clone(), heads: vec![] }],
+            ..Default::default()
+        });
+        let f = Features::default();
+        let out = |s: &Show, scene: Option<(&str, Instant)>| compute(s, &f, &HashMap::new(), &HashMap::new(), false, 1.0, "groove", scene, &mut Runtime::default()).1;
+        let i = s.profiles[0].mode(&s.fixtures[0].mode).unwrap().channels.iter().position(|c| c == &key).unwrap();
+        assert_eq!(out(&s, Some(("sc", Instant::now())))[&fx][i], val, "the scene's look is applied");
+        // a base value, and a route on the same channel wins over it
+        s.presets[0].looks.clear();
+        s.presets[0].base = vec![PresetValue { fixture: fx.clone(), channel: key.clone(), value: 77 }];
+        assert_eq!(out(&s, Some(("sc", Instant::now())))[&fx][i], 77);
+        assert_ne!(out(&s, None)[&fx][i], 77, "no scene playing: defaults");
+        s.routes = vec![Route { id: "r".into(), enabled: true, source: "level".into(), fixtures: vec![fx.clone()], channel: key.clone(),
+            action: RouteAction::Modulate { min: 200, max: 200, smoothing: 0.0 }, ..Default::default() }];
+        assert_eq!(out(&s, Some(("sc", Instant::now())))[&fx][i], 200, "routes play on top of the scene");
+    }
+
+    #[test]
+    fn routes_run_only_in_their_sections_and_rules_apply() {
+        let mut s = show();
+        let level = RouteAction::Modulate { min: 0, max: 255, smoothing: 0.0 };
+        s.routes = vec![Route { id: "r".into(), enabled: true, source: "level".into(), channel: "@intensity".into(), action: level, sections: vec!["drop".into()], ..Default::default() }];
+        let f = Features { level: 1.0, ..Default::default() };
+        let at = |s: &Show, sec: &str| compute(s, &f, &HashMap::new(), &HashMap::new(), false, 1.0, sec, None, &mut Runtime::default()).1["a"][0];
+        assert_eq!(at(&s, "groove"), 0, "a drop-only route stays out of the groove");
+        assert_eq!(at(&s, "drop"), 255);
+        s.routes[0].sections.clear();
+        assert_eq!(at(&s, "breakdown"), 255, "no sections = always");
+        // a brightness cap for the breakdown, like the master fader
+        s.autopilot.rules.insert("breakdown".into(), SectionRule { brightness: 0.5, ..Default::default() });
+        assert_eq!(at(&s, "breakdown"), 128);
+        assert_eq!(at(&s, "drop"), 255);
+        // no strobe in the breakdown
+        let mut st = effect_show(RouteAction::Strobe { rate: "free".into(), hz: 10.0, duty: 0.99, burst_ms: 0, threshold: 0.5 }, "level");
+        st.autopilot.rules.insert("breakdown".into(), SectionRule { strobe: false, ..Default::default() });
+        let lit = |sec: &str| (0..10).any(|_| compute(&st, &f, &HashMap::new(), &HashMap::new(), false, 1.0, sec, None, &mut Runtime::default()).1["a"][0] > 0);
+        assert!(lit("drop"));
+        assert!(!lit("breakdown"));
     }
 
     #[test]
@@ -976,11 +1268,52 @@ mod tests {
     }
 
     #[test]
+    fn routes_leave_a_fixture_open_in_the_pattern_browser_alone() {
+        let mut s = laser_show();
+        s.routes = vec![Route { id: "rot".into(), enabled: true, source: "level".into(), channel: "p1_rotation".into(),
+            action: RouteAction::Modulate { min: 200, max: 200, smoothing: 0.0 }, ..Default::default() }];
+        let rot = |out: &HashMap<String, Vec<u8>>| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == "p1_rotation").unwrap()];
+        let f = Features { level: 1.0, ..Default::default() };
+        let mut rt = Runtime::default();
+        assert_eq!(rot(&run_once(&s, &f, &mut rt)), 200);
+        rt.browsing.insert("L".into());
+        let out = run_once(&s, &f, &mut rt);
+        assert_eq!(rot(&out), s.profiles[0].channel("p1_rotation").unwrap().default, "the route doesn't move it while browsing");
+        let mut manual = HashMap::new();
+        manual.insert(("L".to_string(), "p1_rotation".to_string()), 33u8);
+        let out = compute(&s, &f, &manual, &HashMap::new(), false, 1.0, "groove", None, &mut rt).1;
+        assert_eq!(rot(&out), 33, "what you set in the browser still shows");
+        rt.browsing.clear();
+        assert_eq!(rot(&run_once(&s, &f, &mut rt)), 200, "and routes take over again after");
+    }
+
+    #[test]
+    fn a_look_only_sets_its_own_channels_so_on_off_stays_yours() {
+        let mut s = laser_show();
+        let look = |heads: Vec<String>| RouteAction::Look { set: String::new(), include_defaults: true, tags: vec![], mode: "cycle".into(), hold_ms: 0, heads,
+            looks: vec!["Beam 12 zoom".into()], follow_section: false, max_ms: 0, rest: 0.0, rest_ms: 0 };
+        // a second route (or a pad, or a scene value) holds P2 on; the look leaves it be
+        s.routes = vec![
+            Route { id: "on".into(), enabled: true, source: "level".into(), channel: "p2_on_off".into(), action: RouteAction::Modulate { min: 200, max: 200, smoothing: 0.0 }, ..Default::default() },
+            Route { id: "r".into(), enabled: true, source: "beat".into(), action: look(vec!["P2".into()]), ..Default::default() },
+        ];
+        let at = |s: &Show, out: &HashMap<String, Vec<u8>>, k: &str| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == k).unwrap()];
+        let mut rt = Runtime::default();
+        let out = run_once(&s, &Features { beats: 1, level: 1.0, ..Default::default() }, &mut rt);
+        assert_eq!((at(&s, &out, "p2_pattern"), at(&s, &out, "p2_zoom"), at(&s, &out, "p2_on_off")), (12, 140, 200), "a P1 look on P2: mapped; on/off untouched");
+        // with nothing else driving it, on/off stays at its default (off)
+        s.routes.remove(0);
+        let mut rt = Runtime::default();
+        let out = run_once(&s, &Features { beats: 1, ..Default::default() }, &mut rt);
+        assert_eq!(at(&s, &out, "p2_on_off"), 0, "a look never switches a head on by itself");
+    }
+
+    #[test]
     fn look_applies_pattern_and_secondary_options() {
         let mut s = laser_show();
         s.routes = vec![Route {
             id: "r".into(), enabled: true, source: "beat".into(),
-            action: RouteAction::Look { set: "drop".into(), include_defaults: true, tags: vec![], mode: "random".into(), hold_ms: 0, heads: vec![] },
+            action: RouteAction::Look { set: "drop".into(), include_defaults: true, tags: vec![], mode: "random".into(), hold_ms: 0, heads: vec![], looks: vec![], follow_section: false, max_ms: 0, rest: 0.0, rest_ms: 0 },
             ..Default::default()
         }];
         let mut rt = Runtime::default();
@@ -991,6 +1324,169 @@ mod tests {
         assert_eq!((at("p1_gallery"), at("p1_pattern"), at("p1_zoom")), (10, 12, 140));
         // P2 untouched when no heads are chosen
         assert_eq!(at("p2_pattern"), 0);
+    }
+
+    #[test]
+    fn look_routes_follow_the_section_change_after_a_while_and_rest() {
+        let mut s = laser_show();
+        s.profiles[0].looks[0].tags.push("drop".into()); // Beam 12: pattern 12
+        s.profiles[0].looks[1].tags.push("breakdown".into()); // Chill: pattern 99
+        let look = |follow: bool, max_ms: u32, rest: f32, rest_ms: u32| RouteAction::Look {
+            set: String::new(), include_defaults: true, tags: vec![], mode: "cycle".into(), hold_ms: 0, heads: vec![],
+            looks: vec![], follow_section: follow, max_ms, rest, rest_ms,
+        };
+        s.routes = vec![Route { id: "r".into(), enabled: true, source: "bar".into(), action: look(true, 0, 0.0, 0), ..Default::default() }];
+        let pattern = |out: &HashMap<String, Vec<u8>>| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == "p1_pattern").unwrap()];
+        let mut rt = Runtime::default();
+        let f = Features { beats: 4, ..Default::default() };
+        let run = |s: &Show, sec: &str, rt: &mut Runtime| compute(s, &f, &HashMap::new(), &HashMap::new(), false, 1.0, sec, None, rt).1;
+        assert_eq!(pattern(&run(&s, "drop", &mut rt)), 12, "the drop look in the drop");
+        assert_eq!(pattern(&run(&s, "breakdown", &mut rt)), 99, "changes as soon as the section does, without waiting for a hit");
+        assert_eq!(pattern(&run(&s, "groove", &mut rt)), 99, "no look tagged groove: keeps going with what it has");
+        // only named looks
+        let mut only = look(false, 0, 0.0, 0);
+        if let RouteAction::Look { looks, .. } = &mut only {
+            *looks = vec!["Beam 12 zoom".into()];
+        }
+        s.routes[0].action = only;
+        let mut rt = Runtime::default();
+        assert_eq!(pattern(&run(&s, "breakdown", &mut rt)), 12);
+        // change anyway after max_ms, with no new hits
+        s.routes[0].action = look(false, 30, 0.0, 0);
+        let mut rt = Runtime::default();
+        let first = pattern(&run(&s, "groove", &mut rt));
+        std::thread::sleep(Duration::from_millis(40));
+        assert_ne!(pattern(&run(&s, "groove", &mut rt)), first, "cycled on after max_ms");
+        // resting: always rest after the first look, for a while, then a look again
+        s.routes[0].action = look(false, 30, 1.0, 30);
+        let mut rt = Runtime::default();
+        assert_ne!(pattern(&run(&s, "groove", &mut rt)), 0);
+        std::thread::sleep(Duration::from_millis(40));
+        assert_eq!(pattern(&run(&s, "groove", &mut rt)), 0, "resting: back to the fixture's default");
+        std::thread::sleep(Duration::from_millis(40));
+        assert_ne!(pattern(&run(&s, "groove", &mut rt)), 0, "a rest is followed by a look");
+    }
+
+    #[test]
+    fn motion_routes_sweep_a_channel_and_chase_across_fixtures() {
+        let mut s = show(); // zigbee rgb a, white b, rgb c: all have a dimmer
+        let sweep = Motion { kind: "sweep".into(), ranges: vec![[0, 200]], clock: "beat".into(), period: 4.0, shape: "up".into(), ..Default::default() };
+        s.routes = vec![Route { id: "m".into(), enabled: true, source: "beat".into(), channel: "@intensity".into(),
+            action: RouteAction::Motion { motion: sweep.clone(), spread: 0.0 }, ..Default::default() }];
+        let at = |s: &Show, beats: u64, phase: f32| run_once(s, &Features { beats, beat_phase: phase, ..Default::default() }, &mut Runtime::default());
+        assert_eq!(at(&s, 0, 0.0)["a"][0], 0);
+        assert_eq!(at(&s, 2, 0.0)["a"][0], 100, "half way up after 2 of 4 beats");
+        assert_eq!(at(&s, 2, 0.0)["c"][0], 100, "no spread: all together");
+        s.routes[0].action = RouteAction::Motion { motion: sweep, spread: 1.0 };
+        let o = at(&s, 0, 0.0);
+        assert_eq!((o["a"][0], o["b"][0], o["c"][0]), (0, 67, 133), "spread over the period: they chase");
+    }
+
+    #[test]
+    fn routes_also_move_other_channels_and_restart_on_each_hit() {
+        let mut s = laser_show();
+        let mut motions = std::collections::BTreeMap::new();
+        // zoom sweeps open over one beat after each hit, then holds
+        motions.insert("p1_zoom".to_string(), Motion { kind: "sweep".into(), ranges: vec![[0, 100]], clock: "beat".into(), period: 1.0, shape: "up".into(), retrigger: true, once: true, ..Default::default() });
+        motions.insert("p1_rotation".to_string(), Motion { kind: "sweep".into(), ranges: vec![[0, 100]], clock: "beat".into(), period: 4.0, shape: "up".into(), ..Default::default() });
+        s.routes = vec![Route { id: "r".into(), enabled: true, source: "beat".into(), motions,
+            action: RouteAction::Look { set: "drop".into(), include_defaults: true, tags: vec![], mode: "random".into(), hold_ms: 0, heads: vec![],
+                looks: vec![], follow_section: false, max_ms: 0, rest: 0.0, rest_ms: 0 },
+            ..Default::default() }];
+        let mut rt = Runtime::default();
+        let f = |beats: u64, phase: f32| Features { beats, beat_phase: phase, ..Default::default() };
+        let ch = |out: &HashMap<String, Vec<u8>>, k: &str| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == k).unwrap()];
+        let out = run_once(&s, &f(1, 0.0), &mut rt); // fires at beat 1
+        assert_eq!(ch(&out, "p1_rotation"), 25, "rotation sweeps on top of the look");
+        assert_eq!(ch(&out, "p1_zoom"), 0, "zoom starts its sweep at the hit");
+        assert_eq!(ch(&run_once(&s, &f(1, 0.5), &mut rt), "p1_zoom"), 50, "half a beat after the hit");
+        assert_eq!(ch(&run_once(&s, &f(1, 0.9), &mut rt), "p1_zoom"), 90);
+        assert_eq!(ch(&run_once(&s, &f(2, 0.0), &mut rt), "p1_zoom"), 0, "the next hit starts it again");
+        assert_eq!(ch(&run_once(&s, &f(2, 0.5), &mut rt), "p1_zoom"), 50);
+        // without a hit yet, a restarting motion leaves the channel alone
+        let mut rt2 = Runtime::default();
+        let mut s2 = s.clone();
+        s2.routes[0].source = "kick".into();
+        assert_eq!(ch(&run_once(&s2, &f(2, 0.0), &mut rt2), "p1_zoom"), 0);
+    }
+
+    #[test]
+    fn routes_switch_other_routes_on_off_and_over() {
+        let mut s = laser_show();
+        let switcher = |to: &str, beats: f32| Route {
+            id: "s".into(), enabled: true, source: "bar".into(), action: RouteAction::Cycle { values: vec![0] },
+            switches: vec![RouteSwitch { route: "z".into(), to: to.into(), beats }], ..Default::default()
+        };
+        let zoom = Route {
+            id: "z".into(), enabled: false, source: "level".into(), channel: "p1_zoom".into(),
+            action: RouteAction::Modulate { min: 200, max: 200, smoothing: 0.0 }, ..Default::default()
+        };
+        s.routes = vec![switcher("on", 0.0), zoom];
+        let at = |out: &HashMap<String, Vec<u8>>| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == "p1_zoom").unwrap()];
+        let f = |beats: u64| Features { beats, level: 1.0, bpm: 120.0, ..Default::default() };
+        let mut rt = Runtime::default();
+        let off = at(&run_once(&s, &f(1), &mut rt));
+        assert_ne!(off, 200);
+        assert_eq!(at(&run_once(&s, &f(4), &mut rt)), 200, "the bar switches the zoom route on, the same frame");
+        assert_eq!(at(&run_once(&s, &f(5), &mut rt)), 200, "and it stays on");
+        assert!(!s.routes[1].enabled, "the saved show is never changed");
+        // switching the route by hand (or a scene) ends the switch
+        s.routes[1].enabled = true;
+        run_once(&s, &f(6), &mut rt);
+        s.routes[1].enabled = false;
+        assert_eq!(at(&run_once(&s, &f(7), &mut rt)), off);
+        // toggle flips it on each bar
+        s.routes[0] = switcher("toggle", 0.0);
+        assert_eq!(at(&run_once(&s, &f(8), &mut rt)), 200);
+        assert_eq!(at(&run_once(&s, &f(12), &mut rt)), off);
+        // for a number of beats, then back
+        s.routes[0] = switcher("on", 0.001);
+        assert_eq!(at(&run_once(&s, &f(16), &mut rt)), 200);
+        std::thread::sleep(Duration::from_millis(5));
+        assert_eq!(at(&run_once(&s, &f(17), &mut rt)), off, "it runs out");
+    }
+
+    #[test]
+    fn a_moved_channel_can_have_its_own_trigger() {
+        let mut s = laser_show();
+        let mut motions = std::collections::BTreeMap::new();
+        // the route fires on every beat, but zoom restarts only on each bar
+        motions.insert("p1_zoom".to_string(), Motion { kind: "sweep".into(), ranges: vec![[0, 100]], clock: "beat".into(), period: 1.0, shape: "up".into(), retrigger: true, once: true, trigger: "bar".into(), ..Default::default() });
+        s.routes = vec![Route { id: "r".into(), enabled: true, source: "beat".into(), channel: "p1_pattern".into(), motions,
+            action: RouteAction::Cycle { values: vec![1, 2] }, ..Default::default() }];
+        let mut rt = Runtime::default();
+        let f = |beats: u64, phase: f32| Features { beats, beat_phase: phase, ..Default::default() };
+        let ch = |out: &HashMap<String, Vec<u8>>| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == "p1_zoom").unwrap()];
+        run_once(&s, &f(1, 0.0), &mut rt);
+        assert_eq!(ch(&run_once(&s, &f(4, 0.0), &mut rt)), 0, "the bar starts the sweep");
+        assert_eq!(ch(&run_once(&s, &f(4, 0.5), &mut rt)), 50);
+        assert_eq!(ch(&run_once(&s, &f(5, 0.0), &mut rt)), 100, "the route's own beat doesn't restart it");
+        assert_eq!(ch(&run_once(&s, &f(8, 0.0), &mut rt)), 0, "the next bar does");
+    }
+
+    #[test]
+    fn a_route_switched_on_waits_for_the_next_hit() {
+        let mut s = laser_show();
+        s.routes = vec![Route { id: "r".into(), enabled: false, source: "beat".into(), channel: "p1_pattern".into(),
+            action: RouteAction::Cycle { values: vec![10, 20, 30] }, ..Default::default() }];
+        let ch = |out: &HashMap<String, Vec<u8>>| out["L"][s.profiles[0].modes[0].channels.iter().position(|c| c == "p1_pattern").unwrap()];
+        let f = |beats: u64| Features { beats, ..Default::default() };
+        let mut rt = Runtime::default();
+        run_once(&s, &f(5), &mut rt);
+        s.routes[0].enabled = true;
+        assert_eq!(ch(&run_once(&s, &f(5), &mut rt)), 10, "no stale beat when it comes on");
+        assert_eq!(ch(&run_once(&s, &f(6), &mut rt)), 20);
+    }
+
+    #[test]
+    fn once_plays_a_motion_through_and_holds() {
+        let fe = |b: u64| Features { beats: b, ..Default::default() };
+        let m = Motion { kind: "list".into(), values: vec![1, 2, 3], clock: "beat".into(), period: 1.0, once: true, ..Default::default() };
+        let seq: Vec<u8> = (0..6).map(|b| { let f = fe(b); motion_value(&m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0, offset: 0.0, since_hit: None }, &[]) }).collect();
+        assert_eq!(seq, [1, 2, 3, 3, 3, 3]);
+        let sw = Motion { kind: "sweep".into(), ranges: vec![[0, 100]], period: 2.0, shape: "up".into(), once: true, ..Default::default() };
+        let v = |b: u64| { let f = fe(b); motion_value(&sw, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0, offset: 0.0, since_hit: None }, &[]) };
+        assert_eq!((v(1), v(2), v(5)), (50, 100, 100));
     }
 
     #[test]
@@ -1025,7 +1521,7 @@ mod tests {
     fn sweep_covers_multiple_ranges_and_returns() {
         // two ranges = one strip of 10 values: 10..14 then 200..204
         let m = Motion { kind: "sweep".into(), ranges: vec![[10, 14], [200, 204]], period: 4.0, shape: "pingpong".into(), ..Default::default() };
-        let v = |b: u64, ph: f32| { let f = ctx_at(b, ph); motion_value(&m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0 }, &[]) };
+        let v = |b: u64, ph: f32| { let f = ctx_at(b, ph); motion_value(&m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0, offset: 0.0, since_hit: None }, &[]) };
         assert_eq!(v(0, 0.0), 10, "starts at the first value");
         assert_eq!(v(2, 0.0), 204, "half way through a ping-pong is the far end");
         assert_eq!(v(4, 0.0), 10, "and back again");
@@ -1036,7 +1532,7 @@ mod tests {
     fn step_and_list_advance_per_beat() {
         let step = Motion { kind: "step".into(), ranges: vec![[0, 3]], period: 1.0, step: 2, ..Default::default() };
         let list = Motion { kind: "list".into(), values: vec![7, 9, 11], period: 1.0, ..Default::default() };
-        let seq = |m: &Motion| (0..5).map(|b| { let f = ctx_at(b, 0.2); motion_value(m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0 }, &[]) }).collect::<Vec<_>>();
+        let seq = |m: &Motion| (0..5).map(|b| { let f = ctx_at(b, 0.2); motion_value(m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0, offset: 0.0, since_hit: None }, &[]) }).collect::<Vec<_>>();
         assert_eq!(seq(&step), [0, 2, 0, 2, 0]);
         assert_eq!(seq(&list), [7, 9, 11, 7, 9]);
     }
@@ -1044,7 +1540,7 @@ mod tests {
     #[test]
     fn seeded_random_is_repeatable_and_in_range() {
         let m = Motion { kind: "random".into(), ranges: vec![[20, 29], [100, 109]], period: 1.0, seed: 42, ..Default::default() };
-        let run = |m: &Motion| (0..32).map(|b| { let f = ctx_at(b, 0.0); motion_value(m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0 }, &[]) }).collect::<Vec<_>>();
+        let run = |m: &Motion| (0..32).map(|b| { let f = ctx_at(b, 0.0); motion_value(m, 0, &MotionCtx { feat: &f, secs: 0.0, hits: 0, offset: 0.0, since_hit: None }, &[]) }).collect::<Vec<_>>();
         let a = run(&m);
         assert_eq!(a, run(&m), "same seed, same sequence");
         assert!(a.iter().all(|v| (20..=29).contains(v) || (100..=109).contains(v)));
@@ -1066,7 +1562,7 @@ mod tests {
         let cat = catalog(p, "p1_pattern", &m);
         assert_eq!(cat, [5, 30, 90]);
         let f = Features::default();
-        let at = |hits| motion_value(&m, 0, &MotionCtx { feat: &f, secs: 0.0, hits }, &cat);
+        let at = |hits| motion_value(&m, 0, &MotionCtx { feat: &f, secs: 0.0, hits, offset: 0.0, since_hit: None }, &cat);
         assert_eq!([at(0), at(1), at(2), at(3)], [5, 30, 90, 5]);
     }
 
@@ -1289,6 +1785,11 @@ pub struct MotionCtx<'a> {
     pub secs: f32,
     /// Route hits since the look started.
     pub hits: u64,
+    /// Extra position along the motion, in periods (fixtures chasing each other).
+    pub offset: f32,
+    /// Seconds and beats since the route last fired (None = not yet), for motions that
+    /// restart on each hit.
+    pub since_hit: Option<(f32, f32)>,
 }
 
 /// Catalogued values for a "catalog" motion on channel `key`, in value order.
@@ -1333,18 +1834,32 @@ pub fn motion_value(m: &Motion, base: u8, ctx: &MotionCtx, catalog: &[u8]) -> u8
         base
     };
     let period = m.period.max(0.05);
+    // Restarting on each hit: time and beats count from the last hit (nothing before the first).
+    let (secs, beats) = if m.retrigger && m.clock != "hit" {
+        match ctx.since_hit {
+            Some(s) => s,
+            None => return base,
+        }
+    } else {
+        (ctx.secs, ctx.feat.beats as f32 + ctx.feat.beat_phase)
+    };
     // continuous position (sweeps) and step count (everything else)
     let (pos, steps) = match m.clock.as_str() {
-        "time" => (ctx.secs / period, (ctx.secs / period).floor() as u64),
-        "hit" => (ctx.hits as f32 / period, ctx.hits / (period.round().max(1.0) as u64)),
+        "time" => {
+            let p = secs / period + ctx.offset;
+            (p, p.floor() as u64)
+        }
+        "hit" => (ctx.hits as f32 / period + ctx.offset, (ctx.hits as f32 / period.round().max(1.0) + ctx.offset).floor() as u64),
         _ => {
-            let b = ctx.feat.beats as f32 + ctx.feat.beat_phase;
-            (b / period, (b / period).floor() as u64)
+            let p = beats / period + ctx.offset;
+            (p, p.floor() as u64)
         }
     };
+    // Once: one pass, then hold the end.
+    let last = |n: u64| if m.once { steps.min(n.saturating_sub(1)) } else { steps };
     match m.kind.as_str() {
         "sweep" if total > 0 => {
-            let f = pos.fract();
+            let f = if m.once { pos.clamp(0.0, 1.0) } else { pos.fract() };
             let u = match m.shape.as_str() {
                 "down" => 1.0 - f,
                 "sine" => 0.5 - 0.5 * (f * std::f32::consts::TAU).cos(),
@@ -1353,10 +1868,10 @@ pub fn motion_value(m: &Motion, base: u8, ctx: &MotionCtx, catalog: &[u8]) -> u8
             };
             at(((u * (total - 1) as f32).round()) as u32)
         }
-        "step" if total > 0 => at((steps * m.step.max(1) as u64 % total as u64) as u32),
+        "step" if total > 0 => at((last((total as u64).div_ceil(m.step.max(1) as u64)) * m.step.max(1) as u64 % total as u64) as u32),
         "random" if total > 0 => at((mix(m.seed as u64, steps) % total as u64) as u32),
-        "list" if !m.values.is_empty() => m.values[(steps % m.values.len() as u64) as usize],
-        "catalog" if !catalog.is_empty() => catalog[(steps % catalog.len() as u64) as usize],
+        "list" if !m.values.is_empty() => m.values[(last(m.values.len() as u64) % m.values.len() as u64) as usize],
+        "catalog" if !catalog.is_empty() => catalog[(last(catalog.len() as u64) % catalog.len() as u64) as usize],
         "follow" if total > 0 => {
             let lvl = source_level(&m.source, ctx.feat).unwrap_or(0.0).clamp(0.0, 1.0);
             at((lvl * (total - 1) as f32).round() as u32)

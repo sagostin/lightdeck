@@ -1,6 +1,6 @@
 // AI show designs: the plan the backend returns (already checked against the rig),
 // and applying the parts the user keeps to the show.
-import type { BandDef, ControlMapping, Palette, Preset, Route, Show } from "./types";
+import { describeMotion, type BandDef, type ControlMapping, type Palette, type Preset, type Route, type Show } from "./types";
 import { clone as deepClone } from "./clone";
 
 export interface Plan {
@@ -74,7 +74,7 @@ export function applyPlan(show: Show, plan: Plan, keep: Set<string>, replace: bo
     const c = clone(p);
     for (const k of Object.keys(c.routes)) if (!routeIds.has(k)) delete c.routes[k];
     return c;
-  }).filter((p) => p.values.length || Object.keys(p.routes).length);
+  }).filter((p) => p.values.length || Object.keys(p.routes).length || p.looks?.length || p.base?.length);
   show.presets.push(...presets);
   const presetIds = new Set(show.presets.map((p) => p.id));
   const groups = new Set(show.routes.map((r) => r.group));
@@ -110,13 +110,17 @@ export function describeRoute(r: Route, show: Show, plan: Plan): string {
       case "twinkle": return `twinkle in ${pal(a.palette)}`;
       case "wave": return `${pal(a.palette)} wave (${a.axis}, ${a.beats} beats)`;
       case "cycle": return `cycle ${a.values.length} values`;
-      case "look": return `looks ${a.tags.length ? `tagged ${a.tags.join(", ")}` : "(any)"}`;
+      case "motion": return `${describeMotion(a.motion)}${a.spread ? `, chasing ${Math.round(a.spread * 100)}%` : ""}`;
+      case "look": return `looks ${a.looks?.length ? [...new Set(a.looks.map((x) => show.profiles.flatMap((p) => p.looks).find((l) => l.id === x)?.name ?? x))].join(", ") : a.tags.length ? `tagged ${a.tags.join(", ")}` : "(any)"}${a.follow_section ? ", following the section" : ""}${a.max_ms ? `, change within ${Math.round(a.max_ms / 1000)} s` : ""}${a.rest ? `, rests ${Math.round(a.rest * 100)}%` : ""}`;
     }
   })();
   const names = (ids: string[], list: { id: string; name: string }[]) => ids.map((i) => list.find((x) => x.id === i)?.name ?? i);
   const targets = [...names(r.groups, show.groups), ...names(r.fixtures, show.fixtures), ...names(r.rooms, show.rooms)];
   const ch = r.channel ? ` · ${r.channel.startsWith("@") ? r.channel.slice(1) : r.channel}` : "";
-  return `${r.source} → ${what} · ${targets.length ? targets.join(", ") : "all fixtures"}${ch}`;
+  const also = Object.keys(r.motions ?? {}).length ? ` · also moves ${Object.keys(r.motions!).map((k) => k.replace(/^@/, "")).join(", ")}` : "";
+  const sw = (r.switches ?? []).map((x) => `${x.to === "toggle" ? "toggles" : `switches ${x.to}`} ${[...show.routes, ...plan.routes].find((o) => o.id === x.route)?.name || x.route}${x.beats ? ` for ${x.beats} beats` : ""}`);
+  const swText = sw.length ? ` · ${sw.join(", ")}` : "";
+  return `${r.source} → ${what} · ${targets.length ? targets.join(", ") : "all fixtures"}${ch}${also}${swText}`;
 }
 
 export function describeTrigger(c: ControlMapping): string {

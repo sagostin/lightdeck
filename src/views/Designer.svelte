@@ -1,11 +1,15 @@
 <script module lang="ts">
   import type { DesignResult } from "../lib/design";
-  import type { SceneSpec } from "../lib/blocks";
+  import type { AutopilotPlan } from "../lib/types";
+  import type { applyAutopilotPlan } from "../lib/autopilot";
   // Kept across view switches so a design isn't lost when you look at Routes.
   const saved = $state({
-    mode: "" as "" | "template" | "builder" | "ai",
-    /** Scenes being composed in the scene builder. */
-    scenes: [] as SceneSpec[],
+    mode: "" as "" | "template" | "ai",
+    /** What to ask the AI for. */
+    ask: "scenes" as "scenes" | "autopilot",
+    /** An autopilot set-up suggested by the AI, waiting to be applied. */
+    suggestion: null as AutopilotPlan | null,
+    autopilotUndo: null as ReturnType<typeof applyAutopilotPlan> | null,
     template: "club",
     fromTemplate: false,
     prompt: "",
@@ -24,21 +28,21 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { app, toast } from "../lib/store.svelte";
-  import { GENRES, applyGenre } from "../lib/genres";
+  import { GENRES, applyGenre, currentGenre } from "../lib/genres";
+  import { applyAutopilotPlan as applyAp, sectionInfo, undoAutopilotPlan } from "../lib/autopilot";
   import { aiCounts, applyPlan, describeRoute, describeTrigger, type DesignRequest, type Plan } from "../lib/design";
-  import { TEMPLATES, buildTemplate, templateScenes } from "../lib/templates";
-  import { buildScenes, newBlock } from "../lib/blocks";
-  import SceneBuilder from "../components/SceneBuilder.svelte";
-  import GenreTune from "../components/GenreTune.svelte";
+  import { TEMPLATES, buildTemplate } from "../lib/templates";
   import type { AiSettings, ControlMapping, Show } from "../lib/types";
 
+  let { embedded = false, onadded }: { embedded?: boolean; onadded?: (firstScene: string) => void } = $props();
   const show = app.show!;
   const s = saved;
+  // Templates and the AI style scenes for the genre you've tuned detection for on Audio.
+  if (!s.genre) s.genre = currentGenre(show)?.id ?? "";
   let busy = $state(false);
   let error = $state("");
   let configured = $state(true);
   let refine = $state("");
-  let tuneOpen = $state(false);
   let started = $state(0);
   let now = $state(Date.now());
 
@@ -135,34 +139,6 @@
     }
   }
 
-  /** Build the scene builder's scenes: no AI, same checks and review. */
-  async function buildFromScenes() {
-    error = "";
-    const base: Show = $state.snapshot(show) as Show;
-    if (genre) applyGenre(base, genre);
-    const scenes = $state.snapshot(s.scenes) as SceneSpec[];
-    const empty = scenes.filter((x) => !x.blocks.length).map((x) => x.name);
-    const { plan, skipped } = buildScenes(base, scenes, { genre, title: `Your scenes${genre ? ` · ${genre.name}` : ""}` });
-    if (!plan.routes.length) { error = "Nothing to build: add blocks your rig can drive to at least one scene."; return; }
-    addGenreBands(plan, base);
-    try {
-      const r = await invoke<DesignResult>("design_check", { show: base, plan });
-      r.warnings = [...skipped.map((x) => `Skipped ${x}`), ...empty.map((x) => `Skipped scene "${x}": no blocks`), ...r.warnings];
-      show_result(r, true);
-    } catch (e) {
-      error = String(e);
-    }
-  }
-  function customise() {
-    s.scenes = templateScenes(s.template, $state.snapshot(show) as Show);
-    s.mode = "builder";
-  }
-  function startFrom(sel: HTMLSelectElement) {
-    const v = sel.value;
-    sel.value = "";
-    if (v === "blank") s.scenes = [{ name: "Scene 1", blocks: [newBlock("colour_hits")] }];
-    else if (v) s.scenes = templateScenes(v, $state.snapshot(show) as Show);
-  }
 
   function toggle(id: string) {
     s.keep = keep.has(id) ? s.keep.filter((k) => k !== id) : [...s.keep, id];
@@ -177,8 +153,29 @@
     s.undo = JSON.stringify($state.snapshot(show));
     const msg = applyPlan(show, $state.snapshot(plan) as typeof plan, keep, s.replace);
     s.mapNext = plan.presets.some((p) => keep.has(p.id));
-    toast(`${msg}. Find them under Routes and Control.`);
+    toast(`${msg}.`);
+    onadded?.(plan.presets.find((p) => keep.has(p.id) && show.presets.some((x) => x.id === p.id))?.id ?? "");
   }
+  async function askAutopilot() {
+    busy = true; error = ""; s.suggestion = null; started = Date.now();
+    try {
+      s.suggestion = await invoke<AutopilotPlan>("ai_autopilot", {
+        show: $state.snapshot(show) as Show,
+        request: { prompt: s.prompt, genre: genre ? { name: genre.name, bpm: genre.bpm, style: genre.style } : null },
+      });
+    } catch (e) { error = String(e); }
+    busy = false;
+  }
+  function applySuggestion() {
+    s.autopilotUndo = applyAp(show, s.suggestion!);
+    s.suggestion = null;
+    toast("Autopilot set up from the suggestion");
+  }
+  const tagChanges = $derived(s.suggestion ? show.presets.filter((p) => s.suggestion!.sections[p.id] && JSON.stringify(s.suggestion!.sections[p.id]) !== JSON.stringify(p.sections ?? [])) : []);
+  const tagLabel = (x: string[] | undefined) => (x?.length ? x.map((y) => sectionInfo(y)?.name ?? y).join(", ") : "not used");
+  const rulesText = (sug: AutopilotPlan) => Object.entries(sug.settings.rules ?? {}).map(([k, r]) =>
+    `${sectionInfo(k)?.name}: ${[r!.brightness < 1 && `${Math.round(r!.brightness * 100)}% brightness`, !r!.strobe && "no strobe", !r!.fog && "no fog"].filter(Boolean).join(", ")}`).join("; ");
+
   function undo() {
     if (!s.undo || !app.show) return;
     app.show = JSON.parse(s.undo);
@@ -198,6 +195,7 @@
       case "bands": return `mute ${a.bands.join(", ")}`;
       case "blackout": return "blackout";
       case "autopilot": return "autopilot on/off";
+      case "force_section": return `hold ${a.section}`;
       case "master": return "master brightness";
       case "preset": return `scene: ${[...show.presets, ...(plan?.presets ?? [])].find((p) => p.id === a.preset)?.name ?? a.preset}`;
       case "release_manual": return "release manual";
@@ -215,13 +213,12 @@
   const bandName = (id: string) => show.audio.bands.find((b) => b.id === id)?.name;
 </script>
 
-<div class="designer">
-  <div class="panel col form">
-    <h2>Design a show</h2>
+<div class="designer" class:embedded>
+  <div class="col form" class:panel={!embedded}>
+    <h2>Add scenes</h2>
     <div class="modes">
-      <button class:on={s.mode === "template"} onclick={() => (s.mode = "template")}>Templates</button>
-      <button class:on={s.mode === "builder"} onclick={() => { s.mode = "builder"; if (!s.scenes.length) s.scenes = [{ name: "Scene 1", blocks: [newBlock("colour_hits")] }]; }}>Build your own</button>
-      <button class:on={s.mode === "ai"} onclick={() => (s.mode = "ai")}>AI designer</button>
+      <button class:on={s.mode === "template"} onclick={() => (s.mode = "template")}>From a template</button>
+      <button class:on={s.mode === "ai"} onclick={() => (s.mode = "ai")}>Ask the AI</button>
     </div>
 
     {#if s.mode === "template"}
@@ -237,23 +234,19 @@
           </label>
         {/each}
       </div>
-    {:else if s.mode === "builder"}
-      <p class="muted small">
-        Put scenes together from building blocks: colour hits, waves, sparkle, strobe, laser looks, fog bursts… Pick what each one drives,
-        what sound triggers it and how fast. Works offline, and you review everything before it's added.
-      </p>
-      <div class="row">
-        <select class="grow" onchange={(e) => startFrom(e.currentTarget)}>
-          <option value="">Start again from…</option>
-          <option value="blank">A blank scene</option>
-          {#each TEMPLATES as t}<option value={t.id}>{t.name} template</option>{/each}
-        </select>
-      </div>
-      <SceneBuilder bind:scenes={s.scenes} />
     {:else}
+      <div class="modes">
+        <button class:on={s.ask === "scenes"} onclick={() => (s.ask = "scenes")}>New scenes</button>
+        <button class:on={s.ask === "autopilot"} onclick={() => (s.ask = "autopilot")}>Set up the autopilot</button>
+      </div>
       <p class="muted small">
-        Describe the night and the AI writes routes, scenes, palettes and detection tuning for the rig you've set up:
-        your fixtures, groups, rooms, focus points and saved looks. You review everything before it's added.
+        {#if s.ask === "scenes"}
+          Describe the night and the AI writes scenes (routes, palettes, detection tuning) for the rig you've set up, tagged for the
+          autopilot, with strobe or looks only in the sections that suit them. You review everything before it's added.
+        {:else}
+          The AI looks at what each of your scenes switches on, tags it with the sections it suits, and suggests when to switch and
+          limits per section. You see the changes before they're applied.
+        {/if}
       </p>
       {#if !configured}
         <div class="tag warn note">Set up an AI provider first, or use Templates. <button class="ghost" onclick={() => (app.view = "ai")}>AI settings</button></div>
@@ -271,19 +264,19 @@
         <option value="">Any / mixed</option>
         {#each GENRES as g}<option value={g.id}>{g.name} ({g.bpm[0]}–{g.bpm[1]} BPM)</option>{/each}
       </select>
-      {#if genre}<button class:on={tuneOpen} onclick={() => (tuneOpen = !tuneOpen)} title="Preview and apply this genre's detection settings now, without building anything">Tune detection only…</button>{/if}
     </div>
-    {#if genre && tuneOpen}{#key genre.id}<GenreTune genreId={genre.id} picker={false} />{/key}{/if}
     {#if genre}<p class="faint small">{genre.style}</p>{/if}
+    <p class="faint small">Tuning detection for a genre is on the <button class="link" onclick={() => (app.view = "audio")}>Audio</button> screen.</p>
 
     {#if s.mode === "template"}
       <div class="row go">
-        <button class="primary" onclick={buildFromTemplate}>Build setup</button>
-        <button onclick={customise} title="Open this template in the scene builder to change its scenes and blocks">Customise…</button>
+        <button class="primary" onclick={buildFromTemplate}>Build scenes</button>
       </div>
-    {:else if s.mode === "builder"}
-      <div class="row go sticky">
-        <button class="primary" onclick={buildFromScenes} disabled={!s.scenes.some((x) => x.blocks.length)}>Build scenes</button>
+      <p class="faint small">Template scenes are made of blocks, so you can change them on the scene afterwards.</p>
+    {:else if s.ask === "autopilot"}
+      <div class="row go">
+        <button class="primary" onclick={askAutopilot} disabled={busy || !configured || !show.presets.length}>{busy ? "Thinking…" : "Suggest autopilot set-up"}</button>
+        {#if s.autopilotUndo}<button class="ghost" onclick={() => { undoAutopilotPlan(show, s.autopilotUndo!); s.autopilotUndo = null; toast("Undone"); }}>Undo suggestion</button>{/if}
       </div>
     {:else}
       <span class="label">Generate</span>
@@ -301,8 +294,29 @@
     {#if error}<p class="err small">{error}</p>{/if}
   </div>
 
-  <div class="panel col result">
-    {#if !plan}
+  <div class="col result" class:panel={!embedded}>
+    {#if s.mode === "ai" && s.ask === "autopilot"}
+      {#if s.suggestion}
+        {@const sug = s.suggestion}
+        <h2>Autopilot suggestion</h2>
+        {#if sug.notes}<p class="summary">{sug.notes}</p>{/if}
+        <section>
+          <h3>Scene tags</h3>
+          {#each tagChanges as p (p.id)}
+            <div class="small">{p.name}: {tagLabel(p.sections)} → <b>{tagLabel(sug.sections[p.id])}</b></div>
+          {:else}<div class="small faint">No changes to scene tags.</div>{/each}
+        </section>
+        <section>
+          <h3>Switching</h3>
+          <div class="small">Stay {sug.settings.min_bars} bars, drops cut in after {sug.settings.drop_bars}, change after {sug.settings.max_bars || "never"}, pause {sug.settings.pause_s}s after you pick a scene.</div>
+          <div class="small">{rulesText(sug) ? `Limits: ${rulesText(sug)}` : "No limits per section."}</div>
+        </section>
+        {#each sug.warnings as w}<div class="small warn">{w}</div>{/each}
+        <div class="row foot"><div class="grow"></div><button class="ghost" onclick={() => (s.suggestion = null)}>Discard</button><button class="primary" onclick={applySuggestion}>Apply</button></div>
+      {:else}
+        <div class="empty col"><span class="big">✦</span><span>The suggestion will appear here to review.</span></div>
+      {/if}
+    {:else if !plan}
       <div class="empty col">
         <span class="big">✧</span>
         <span>Your design will appear here to review.</span>
@@ -425,7 +439,6 @@
   .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
   .checks label, .inline { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 13px; }
   .go { margin-top: 10px; }
-  .go.sticky { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0; border-top: 1px solid var(--line); z-index: 2; }
   .note { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
   .result { min-height: 420px; max-height: calc(100vh - 120px); }
   .empty { align-items: center; justify-content: center; gap: 8px; text-align: center; flex: 1; padding: 60px 20px; }
@@ -445,4 +458,8 @@
   .next { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-bg); }
   .foot { border-top: 1px solid var(--line-2); padding-top: 8px; }
   @media (max-width: 980px) { .designer { grid-template-columns: 1fr; } }
+  .designer.embedded { grid-template-columns: 1fr; height: auto; }
+  .designer.embedded .result { max-height: none; min-height: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+  .link { padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; font: inherit; }
+  .warn { color: var(--warn); }
 </style>

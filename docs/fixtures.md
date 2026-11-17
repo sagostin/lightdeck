@@ -106,15 +106,19 @@ The catalogue on the right lists every tagged value. **Copy catalog to…** copi
 
 Preview takes manual control of the channels you touch; **Release preview** or leaving the tab releases them.
 
+While the browser is open, it **takes over the preview fixture**: routes and the playing scene leave it alone (a **routes paused on …** tag shows this), so the fixture and every slider show only what you set there, even with the show running. Everything else keeps playing. Untick **pause routes on it** to see the fixture with the show on top, and leaving the pattern browser hands it back to the routes.
+
 ### Looks: a pattern plus secondary options
 
 Often a pattern only looks right with other settings: the beam gallery, a dynamic zoom, a rotation, a colour chase. A **look** saves them together as one option.
 
 1. In the pattern browser, find the pattern.
-2. In **Secondary options**, set the other channels on the same projector with their sliders. Tick the ones to keep; moving a slider ticks it automatically.
+2. In **Secondary options**, set the other channels on the same projector with their sliders. Tick the ones to keep; moving a slider ticks it automatically. A ticked channel is saved at the value it shows, 0 included. An unticked one isn't part of the look: it shows the fixture's live value (from routes, a scene, a pad or your sliders), and unticking gives the channel back to them. Leave on/off channels such as *P2 On/Off* unticked to switch them yourself, or tick one to make the look set it.
 3. Name the look, add tags, pick sets and a rating, then click **Save look**.
 
-**Your looks** on the right lists the looks for this projector. Click one to **edit** it: it previews on the fixture, and its name, tags, sets and rating load into the form, where changes save straight away. Change channels or motions, then click **Update look** to save them into it, or **Save as new** to keep both. **New look** clears the form. Routes apply looks with the [Look action](routes.md#looks).
+To have [look routes that follow the section](routes.md#looks) use a look in some parts of a track, click **Sections** under the tags: `breakdown`, `groove`, `build`, `drop`.
+
+Looks sit under the pattern they're built on. The panel on the right, **<channel> & looks**, lists the values you've catalogued on the channel you're browsing, with the looks built on each value folded out underneath (▾ / ▸ hides or shows them). Values your looks use but you haven't catalogued are listed too, and looks built on another channel (say the gallery, while you browse patterns) sit at the bottom under **Looks built on other channels**, grouped by value; click one of those values to browse it. Click a value to browse it, or a look to edit it. Clicking a look **edits** it: the browser switches to the look's main channel (its pattern channel), sets every channel in the look, lets go of channels the previous look set, and previews it on the fixture, and its name, tags, sets and rating load into the form, where changes save straight away. Change channels or motions, then click **Update look** to save them into it (it reads **Update look •** while there are unsaved channel changes, and **Saved** when there are none), or **Save as new** to keep both. A look belongs to the main value it was made on: if you step to another value while editing, **Update look** turns off and **Save as new** makes a look on the new value with the same secondary options, leaving the original as it was (name, tag and rating changes then go to the new look too). **Back to …** returns to the look's own value. **New look** clears the form and keeps the options set now. Click the selected look again (or **Deselect**) to deselect it: the form clears and its secondary options are unticked and handed back, while you stay on the same pattern value. Routes apply looks with the [Look action](routes.md#looks).
 
 ### Moving channels (motions)
 
@@ -127,7 +131,7 @@ Any channel in a look, including the pattern itself, can **move** instead of hol
 | Random (seeded) | Jumps to random values in the ranges. The **seed** makes it repeatable: the same seed always plays the same sequence. **New seed** tries another. |
 | List of values | Plays your own list in order (**from catalogue** fills it with your catalogued values) |
 | Catalogued values | Plays the catalogued values that carry the chosen tags, in order: your known patterns as an animation |
-| Follow audio level | Moves through the ranges with a level source (Bass level, Energy…) |
+| Follow audio level | Moves through the ranges with a sound's level: **one band** (Kick, Bass, Vocals… whichever bands you set up on the Audio screen) or **the whole track** (overall level, energy, beat phase). Silent is the bottom of the range, full the top |
 
 - **Timing:** every N **beats** (locked to the BPM), every N **seconds**, or every N **route hits** (each time the Look route fires).
 - **Ranges:** you can give several, and they're played in order as if they were one long range. The chips under the ranges add a capability range in one click (e.g. *Dynamic zoom in*), or **all usable** adds every range that isn't blocked.

@@ -9,9 +9,10 @@
 
 use crate::audio::Features;
 use crate::control::Input;
-use crate::model::{AutopilotSettings, Show};
+use crate::model::{AutopilotSettings, Show, SECTIONS};
 use serde::Serialize;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -166,12 +167,15 @@ impl Pilot {
         }
     }
 
-    /// One bar. Returns the scene to switch to and why, if it's time.
-    pub fn on_bar(&mut self, b: BarStats, scenes: &[Scene], s: &AutopilotSettings, paused: bool) -> Option<(String, String)> {
-        if b.level < 0.02 {
+    /// One bar. Returns the scene to switch to and why, if it's time. `forced` is a section
+    /// held on a pad, which counts instead of the one heard.
+    pub fn on_bar(&mut self, b: BarStats, scenes: &[Scene], s: &AutopilotSettings, paused: bool, forced: Option<&'static str>) -> Option<(String, String)> {
+        if b.level < 0.02 && forced.is_none() {
             return None; // silence: nothing to follow
         }
-        let section = self.detector.bar(b);
+        let heard = self.detector.bar(b);
+        let section = forced.unwrap_or(heard);
+        let how = if forced.is_some() { "forced" } else { "detected" };
         self.bars_in_scene += 1;
         if paused || scenes.is_empty() {
             return None;
@@ -189,7 +193,7 @@ impl Pilot {
             if self.bars_in_scene < wait.max(1) {
                 return None;
             }
-            if section == wanted { format!("{section} detected") } else { format!("{section} detected; no {section} scene, using {wanted}") }
+            if section == wanted { format!("{section} {how}") } else { format!("{section} {how}; no {section} scene, using {wanted}") }
         } else if s.max_bars > 0 && self.bars_in_scene >= s.max_bars && fits.len() > 1 {
             format!("{} bars of {wanted}, changing it up", self.bars_in_scene)
         } else {
@@ -225,6 +229,8 @@ pub struct Status {
     pub scenes: usize,
     /// Where this bar sits between the quiet and loud parts, 0..1.
     pub loudness: f32,
+    /// A section held on a pad, if any.
+    pub forced: Option<String>,
 }
 
 struct Inner {
@@ -237,16 +243,39 @@ struct Inner {
 
 pub struct Autopilot {
     inner: Mutex<Inner>,
-    app: Mutex<Option<AppHandle>>,
+    app: Mutex<Option<(AppHandle, Arc<RwLock<Show>>)>>,
+    /// The section in effect, shared with the engine.
+    section: Arc<AtomicU8>,
+    forced: Mutex<Option<&'static str>>,
 }
 
 impl Autopilot {
-    pub fn new() -> Arc<Self> {
+    pub fn new(section: Arc<AtomicU8>) -> Arc<Self> {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1);
         Arc::new(Self {
             inner: Mutex::new(Inner { pilot: Pilot::new(seed), running: false, paused_until: None, history: VecDeque::new(), reason: String::new() }),
             app: Mutex::new(None),
+            section,
+            forced: Mutex::new(None),
         })
+    }
+
+    fn publish(&self, heard: &'static str) {
+        let s = self.forced().unwrap_or(heard);
+        self.section.store(SECTIONS.iter().position(|x| *x == s).unwrap_or(1) as u8, Ordering::Relaxed);
+    }
+
+    pub fn forced(&self) -> Option<&'static str> {
+        *self.forced.lock().unwrap()
+    }
+
+    /// Hold a section (a pad), or let go of it. Routes follow at once; the autopilot
+    /// switches scenes for it on the next bar.
+    pub fn force(&self, section: Option<&str>) {
+        *self.forced.lock().unwrap() = section.and_then(|s| SECTIONS.iter().copied().find(|x| *x == s));
+        let heard = self.inner.lock().unwrap().pilot.detector.section;
+        self.publish(heard);
+        self.emit();
     }
 
     pub fn status(&self, show: &Show) -> Status {
@@ -254,7 +283,7 @@ impl Autopilot {
         let paused_s = i.paused_until.map(|t| t.saturating_duration_since(Instant::now()).as_secs() as u32).unwrap_or(0);
         Status {
             running: i.running,
-            section: i.pilot.detector.section.to_string(),
+            section: self.forced().unwrap_or(i.pilot.detector.section).to_string(),
             history: i.history.iter().cloned().collect(),
             scene: i.pilot.scene.clone(),
             bars_in_scene: i.pilot.bars_in_scene,
@@ -262,6 +291,7 @@ impl Autopilot {
             reason: i.reason.clone(),
             scenes: scenes(show).len(),
             loudness: i.pilot.detector.rel,
+            forced: self.forced().map(String::from),
         }
     }
 
@@ -297,15 +327,15 @@ impl Autopilot {
         self.inner.lock().unwrap().paused_until = None;
     }
 
-    fn emit(&self, show: &Show) {
-        if let Some(app) = self.app.lock().unwrap().as_ref() {
-            let _ = app.emit("autopilot", self.status(show));
-        }
+    fn emit(&self) {
+        let Some((app, show)) = self.app.lock().unwrap().clone() else { return };
+        let st = self.status(&show.read().unwrap());
+        let _ = app.emit("autopilot", st);
     }
 
     /// Follow the audio on a thread of its own, sending scene changes to the controls.
     pub fn start(self: &Arc<Self>, app: AppHandle, show: Arc<RwLock<Show>>, features: Arc<Mutex<Features>>, tx: Sender<Input>) {
-        *self.app.lock().unwrap() = Some(app);
+        *self.app.lock().unwrap() = Some((app, show.clone()));
         let me = self.clone();
         std::thread::Builder::new()
             .name("autopilot".into())
@@ -347,8 +377,11 @@ impl Autopilot {
                             i.paused_until = None;
                         }
                         let paused = !i.running || i.paused_until.is_some();
-                        let r = i.pilot.on_bar(stats, &list, &settings, paused);
-                        let sec = i.pilot.detector.section.to_string();
+                        let forced = me.forced();
+                        let r = i.pilot.on_bar(stats, &list, &settings, paused, forced);
+                        let heard = i.pilot.detector.section;
+                        me.publish(heard);
+                        let sec = forced.unwrap_or(heard).to_string();
                         i.history.push_back(sec);
                         while i.history.len() > 32 {
                             i.history.pop_front();
@@ -361,7 +394,7 @@ impl Autopilot {
                     if let Some((preset, _)) = switch {
                         let _ = tx.send(Input::Autopilot { preset });
                     }
-                    me.emit(&show.read().unwrap());
+                    me.emit();
                 }
             })
             .unwrap();
@@ -414,11 +447,11 @@ mod tests {
     #[test]
     fn switches_scenes_with_the_music() {
         let scenes = [scene("calm", &["breakdown"]), scene("main", &["groove"]), scene("rise", &["build"]), scene("peak", &["drop"])];
-        let s = AutopilotSettings { min_bars: 4, max_bars: 0, drop_bars: 1, pause_s: 0 };
+        let s = AutopilotSettings { min_bars: 4, max_bars: 0, drop_bars: 1, pause_s: 0, ..Default::default() };
         let mut p = Pilot::new(7);
         let mut log = vec![];
         for (i, b) in track().into_iter().enumerate() {
-            if let Some((id, why)) = p.on_bar(b, &scenes, &s, false) {
+            if let Some((id, why)) = p.on_bar(b, &scenes, &s, false, None) {
                 log.push((i, id, why));
             }
         }
@@ -431,17 +464,17 @@ mod tests {
     #[test]
     fn keeps_a_scene_for_the_minimum_bars() {
         let scenes = [scene("a", &["groove"]), scene("b", &["drop"])];
-        let s = AutopilotSettings { min_bars: 8, max_bars: 0, drop_bars: 8, pause_s: 0 };
+        let s = AutopilotSettings { min_bars: 8, max_bars: 0, drop_bars: 8, pause_s: 0, ..Default::default() };
         let mut p = Pilot::new(1);
         p.set_scene("a");
         for _ in 0..3 {
-            p.on_bar(bar(0.45, 4), &scenes, &s, false);
+            p.on_bar(bar(0.45, 4), &scenes, &s, false, None);
         }
         // loud with kicks: a drop, but only 4 bars into the scene
-        assert_eq!(p.on_bar(bar(0.9, 4), &scenes, &s, false), None);
+        assert_eq!(p.on_bar(bar(0.9, 4), &scenes, &s, false, None), None);
         let mut switched = None;
         for _ in 0..6 {
-            switched = switched.or(p.on_bar(bar(0.9, 4), &scenes, &s, false));
+            switched = switched.or(p.on_bar(bar(0.9, 4), &scenes, &s, false, None));
         }
         assert_eq!(switched.unwrap().0, "b");
     }
@@ -450,18 +483,18 @@ mod tests {
     fn falls_back_and_varies() {
         // No drop scene: a drop uses the build scene.
         let scenes = [scene("g1", &["groove"]), scene("g2", &["groove"]), scene("up", &["build"])];
-        let s = AutopilotSettings { min_bars: 1, max_bars: 8, drop_bars: 1, pause_s: 0 };
+        let s = AutopilotSettings { min_bars: 1, max_bars: 8, drop_bars: 1, pause_s: 0, ..Default::default() };
         let mut p = Pilot::new(3);
         let mut seen = std::collections::HashSet::new();
         for _ in 0..40 {
-            if let Some((id, _)) = p.on_bar(bar(0.45, 4), &scenes, &s, false) {
+            if let Some((id, _)) = p.on_bar(bar(0.45, 4), &scenes, &s, false, None) {
                 seen.insert(id);
             }
         }
         assert!(seen.contains("g1") && seen.contains("g2") && !seen.contains("up"), "max_bars rotates groove scenes: {seen:?}");
         let mut out = None;
         for _ in 0..3 {
-            out = out.or(p.on_bar(bar(1.0, 4), &scenes, &s, false));
+            out = out.or(p.on_bar(bar(1.0, 4), &scenes, &s, false, None));
         }
         let (id, why) = out.unwrap();
         assert_eq!(id, "up");
@@ -469,13 +502,26 @@ mod tests {
     }
 
     #[test]
+    fn a_held_section_counts_instead_of_the_heard_one() {
+        let scenes = [scene("a", &["groove"]), scene("b", &["drop"])];
+        let s = AutopilotSettings { min_bars: 1, max_bars: 0, drop_bars: 1, pause_s: 0, ..Default::default() };
+        let mut p = Pilot::new(1);
+        p.set_scene("a");
+        let (id, why) = p.on_bar(bar(0.45, 4), &scenes, &s, false, Some("drop")).unwrap();
+        assert_eq!((id.as_str(), why.as_str()), ("b", "drop forced"));
+        // even in silence
+        p.set_scene("a");
+        assert_eq!(p.on_bar(bar(0.0, 0), &scenes, &s, false, Some("drop")).unwrap().0, "b");
+    }
+
+    #[test]
     fn paused_or_silent_means_no_switching() {
         let scenes = [scene("a", &["groove"])];
         let s = AutopilotSettings::default();
         let mut p = Pilot::new(1);
-        assert_eq!(p.on_bar(bar(0.5, 4), &scenes, &s, true), None);
-        assert_eq!(p.on_bar(bar(0.0, 0), &scenes, &s, false), None);
-        assert_eq!(p.on_bar(bar(0.5, 4), &scenes, &s, false).unwrap().0, "a");
-        assert_eq!(p.on_bar(bar(0.5, 4), &[], &s, false), None);
+        assert_eq!(p.on_bar(bar(0.5, 4), &scenes, &s, true, None), None);
+        assert_eq!(p.on_bar(bar(0.0, 0), &scenes, &s, false, None), None);
+        assert_eq!(p.on_bar(bar(0.5, 4), &scenes, &s, false, None).unwrap().0, "a");
+        assert_eq!(p.on_bar(bar(0.5, 4), &[], &s, false, None), None);
     }
 }

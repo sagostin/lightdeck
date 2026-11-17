@@ -54,6 +54,7 @@ export function installMocks(demo = false) {
       case "autopilot_status": return null; // the demo feed fills it in
       case "autopilot_set": return null;
       case "autopilot_resume": return null;
+      case "autopilot_force": return null; // the demo feed reads app.autopilot.forced
       case "ai_autopilot":
         return demo
           ? new Promise((r) => setTimeout(() => r({

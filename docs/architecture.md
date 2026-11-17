@@ -29,6 +29,8 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/lib/types.ts` | TypeScript mirror of the Rust model, plus presets and labels |
 | `src/lib/genres.ts` | Genre presets: detection tuning and lighting-style notes |
 | `src/lib/design.ts` | Design plan types, applying a plan to the show, preview text |
+| `src/lib/scenes.ts` | Scene helpers: route states, and block scenes (rebuild, add, rename, delete) |
+| `src/lib/autopilot.ts` | Sections, scene-tag coverage and guessing, applying AI autopilot suggestions |
 | `src/lib/blocks.ts` | Scene building blocks: rig analysis, the block catalogue, building scenes of blocks into a plan |
 | `src/lib/templates.ts` | Setup templates: fixed scene lists made of blocks |
 | `src/lib/controllers.ts` | Built-in controller layouts, auto-mapping, learning profiles |
@@ -36,7 +38,7 @@ LightDeck is a [Tauri 2](https://tauri.app) app. A Rust backend does everything 
 | `src/lib/library.ts` | Fixture library: comparing and merging fixture types and their looks |
 | `src/lib/aim.ts` | Fixture aiming: where a beam lands and its footprint (mirrors `light_spot` in model.rs) |
 | `src/lib/rig.ts` | Reading fixture capabilities without app state (shared by templates and auto-mapping) |
-| `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Designer, Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
+| `src/views/` | One file per screen: Live, Rooms, Patch, Library (fixture types), Routes, Scenes (with Designer as its add-scenes pane), Control, Audio, Outputs (Art-Net), Zigbee, AiSettings |
 | `src/components/` | Shared UI: SceneBuilder, SceneEditor, ControllerSetup, RoomCanvas, SpectrumEditor, PatternBrowser, TargetPicker, ChannelSelect, Palette*, GroupsPanel, FileMenu, ConfirmButton, Tags, Meters |
 | `src-tauri/src/model.rs` | The show format (serde), defaults, migrations |
 | `src-tauri/src/engine.rs` | The frame loop, routes, effects, limits, target resolution |
@@ -119,6 +121,10 @@ The network keys are generated once into `zigbee/network.json` in the app data f
 
 **Feedback.** When `MidiSettings.feedback` is on, `midi.rs` also opens the output port with the same name as each connected input, choosing a style with `feedback::style_for` (from the port name, or `feedback_style`). A `midi-feedback` thread asks `Controls::leds()` ten times a second which MIDI-mapped pads are lit and in what colour, and `Midi::send_leds` sends only what changed per port, switching off pads whose control was removed. `leds()` takes the control locks before the show lock, the same order `apply_preset` uses.
 
+**Scenes.** `Engine.scene` holds the scene playing (set by `Controls::apply_preset` for any preset where `Preset::is_scene`) and when it started. In `compute`, right after channel defaults, its `looks` (each a `Target` plus a look name or id, applied through `look_values` with motions timed from the scene's start) and `base` values are written, so routes then play on top. Presets that only have `values` are still manual overrides. The UI's scene page groups the rig with `scenes.ts`'s `rigRows`, and `captureScene` records routes and manual values into a scene.
+
+**Sections.** `Engine.section` (an `AtomicU8` index into `SECTIONS`) is the section in effect: the autopilot's detector writes it every bar, or a held section (`Autopilot::force`, from `ControlAction::ForceSection` or the `autopilot_force` command) overrides it at once. `compute` skips routes whose `sections` don't include it, skips strobe routes and resets route-driven fog channels to their defaults when the section's `SectionRule` says so, and multiplies the master by its brightness cap. Block scenes keep their `BlockUse` list in `Preset.blocks` (opaque JSON to Rust); `blocks.ts` turns each block into one route per varied section plus one for the rest (`blockParts`), stamping `Route.scene` with the owning scene, and `scenes.ts`'s `rebuildScene` swaps a scene's owned routes in place with stable ids.
+
 **Autopilot.** `autopilot.rs` runs its own thread at 50 Hz on the audio `Features`. Each time `beats / 4` changes it closes a bar (mean overall level, hits of the first band) and gives it to `Pilot::on_bar`. The `Detector` places the bar between the 10th and 90th percentile of the last 64 bars, looks at the 2-bar vs previous-4-bar trend and at kick presence, and confirms a new section after two bars (a drop at once). The pilot picks among scenes whose `Preset.sections` include the section (with fallbacks), respecting `AutopilotSettings` (min, drop and max bars), and sends `Input::Autopilot` to the controls thread, which applies the preset only while the autopilot is on. A scene recalled by hand calls `Autopilot::manual_scene`, which follows it and pauses for `pause_s`. Status goes to the UI as the `autopilot` event every bar. `designer::suggest_autopilot` asks the AI for sections and settings and `check_autopilot` validates the reply.
 
 ## Commands
@@ -135,7 +141,7 @@ The UI calls these through `invoke` (see `generate_handler!` in `lib.rs`):
 
 ## Previewing the UI in a browser
 
-During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen, and `?demo` for the demo show in `src/dev/demo.ts` with a simulated audio feed (`npm run screenshots` captures it for the README). `?view=design&autodesign` runs the designer against a canned plan in `src/dev/demo-design.ts`. Mocks are only loaded in development builds.
+During development, opening `http://localhost:1420` in a normal browser (while `npx tauri dev` or `npm run dev` runs) uses `src/dev/mock.ts` to fake the backend with `src/dev/sample-show.json`. Add `?view=routes` (or any screen id) to jump to a screen, and `?demo` for the demo show in `src/dev/demo.ts` with a simulated audio feed (`npm run screenshots` captures it for the README). `?view=scenes&autodesign` runs the designer against a canned plan in `src/dev/demo-design.ts`. Mocks are only loaded in development builds.
 
 ## Tests
 

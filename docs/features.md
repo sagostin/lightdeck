@@ -12,6 +12,7 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 - **Multi-head fixtures.** Fixtures with several projectors (P1/P2 lasers) show, route and store looks for each head separately. Looks map across heads by channel name.
 - **Pattern browser.** Step through a laser's values on the real device with the keyboard. Tag them, rate them and save the ones you like as looks.
 - **Looks.** A look is a pattern plus secondary options (zoom, rotation, colour…), saved per fixture type. Looks can be grouped into sets (*drop*, *calm*…), and channels in a look can move: sweeps, steps, random values, lists, catalogue picks or follow-the-level, timed by the beat, by seconds or by hits.
+- **Look routes.** Apply saved looks picked by set, tags or name, randomly by rating or in order, *hold at least*, *change after at most*, rests (no look for a while) and the route's every-N / cooldown / chance timing. **Follow the section** picks looks tagged `breakdown`, `groove`, `build` or `drop` for the part of the track playing.
 - **Fixture library.** Keep fixture types and their looks in an app-wide library. Projects keep their own copy and merge updates both ways, so venue-only looks survive.
 - **`.lightdeck-fixture` files.** Export a fixture type with its looks to share it, then import it into another library or project.
 - **Beam angle per type.** Read from QLC+ lens data, set by hand, or a sensible default for the kind.
@@ -74,14 +75,19 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
   - *Node hop* (nearest neighbour in 3D);
   - *Modulate* (follow a level);
   - *Cycle values*;
+  - *Move* (sweep back and forth, step, seeded random, list, catalogue or follow a level, with fixtures chasing each other);
   - *Look* (apply a saved look, picked from a set or by tags).
+- **Also do.** Without a separate route, any route can also:
+  - **move other channels** on its fixtures (zoom, rotation, position…), restarting on each hit or on a sound of its own, and playing once or looping: a kick flash that sweeps the zoom open on every kick;
+  - **switch other routes** on, off or over for a number of beats: a build snare that brings the strobe in for 8 beats.
+- **Help on every field.** Hover the **i** for what a setting does; each route sums up its timing in plain words.
 - **Effects.** These drive each fixture's brightness and colour automatically, across RGB, colour-preset and dimmerless fixtures:
   - **Strobe:** beat-synced (1, 2, 4 or 8 flashes per beat) or free-running, as a burst or while a level is above a threshold.
   - **Colour palette:** all the same colour, spread across the room, rings out from a focus point, slices around it, or random per fixture. With crossfades.
   - **Twinkle:** sparkles over a dim base that cluster near a focus point.
   - **Wave:** moves left to right, front to back, out from a focus point, around it, or low to high, in time with the beat.
   - **Fade with distance:** any effect lights an area around a focus point instead of the whole room.
-- **Timing and chance.** Act on every Nth hit, with a cooldown, or with a probability.
+- **Timing and chance.** Act on every Nth hit, with a cooldown, with a chance, and only in some sections of a track.
 - **Palettes.** Six built-in palettes (Club, Sunset, Ice, Rainbow, Forest, White), plus your own.
 - **Organisation:**
   - route groups, with *All on* / *All off*;
@@ -93,29 +99,30 @@ Everything LightDeck does today, by area. Each heading links to the guide with t
 
 - **Scenes.** Switch route groups with *On*, *Off* or *Leave* per group. Presets also hold hand-set channel values.
 - **MIDI and keyboard mappings** with Learn:
-  - **Actions:** route or group on/off, recall preset, blackout, master, set a channel (or move it with a fader), mute bands, band sensitivity, release manual control.
+  - **Actions:** route or group on/off, recall a scene or preset, autopilot on/off, hold a section, blackout, master, set a channel (or move it with a fader), mute bands, band sensitivity, release manual control.
   - **Button modes:** toggle, while held, on, off or fader.
 - **Controller setup.**
   - One-click mapping for known controllers (Akai APC mini, Novation Launchpad, Korg nanoKONTROL2) or your own learned layouts.
   - It maps only what the show actually has, and tells you when the mapping is out of date.
-- **Pad lights (MIDI feedback).** Pads show which scenes, routes, blackout and autopilot are on, in the scene's or your chosen colour. Full RGB on the APC mini mk2 and Launchpad X / Mini mk3 (switched to Programmer mode automatically), green/red/yellow on the original APC mini, and on/off for the nanoKONTROL2 and other controllers.
-- **Autopilot.** Hears breakdowns, grooves, builds and drops bar by bar and switches to scenes tagged for them:
-  - stays on a scene a minimum number of bars, lets a drop cut in sooner, and rotates scenes for variety;
-  - pauses when you pick a scene yourself;
-  - scenes are tagged by hand, guessed offline from their names and content, or suggested by the AI;
-  - a live view of what it hears and why it switched, and a pad or key to switch it on and off.
+- **Pad lights (MIDI feedback).** Pads show which scenes, routes, blackout, autopilot and held sections are on, in the scene's or your chosen colour. Full RGB on the APC mini mk2 and Launchpad X / Mini mk3 (switched to Programmer mode automatically), green/red/yellow on the original APC mini, and on/off for the nanoKONTROL2 and other controllers.
 - **Master brightness and blackout.** Always last in the chain. `B` toggles blackout.
 
-## Show designer ([guide](designer.md))
+## Scenes and the autopilot ([guide](scenes.md))
 
-- **Templates (offline).** Club night, Party, Chill / lounge and Test my rig. Each builds scenes, routes and palettes from your rig with fixed rules.
-- **Build your own (offline).** Compose scenes from building blocks: colour hits, colour changes, wave, sparkle, flash, strobe, node hop, brightness follows, laser looks and fog bursts. For each block, pick what it drives, which sound triggers it, the colours and the speed.
-- **AI designer.**
-  - Describe the night and an AI model designs scenes, routes, palettes and genre-tuned detection, using your fixtures, looks, rooms and focus points.
-  - Every plan is checked and repaired before you see it.
-  - You can refine it with follow-up instructions.
-- **Review before adding.** Untick anything you don't want, replace earlier generated designs, and undo.
-- **Ready for the autopilot.** Every designer tags its scenes with the sections they suit.
+- **One Scenes screen.** The autopilot bar, your scenes, and the selected scene in one place; recall any scene from here, Live, or a pad or key.
+- **Scenes are states of the rig.** For each fixture group: a saved look it sits in, and which routes are on, off or left alone; routes play on top of the looks and nothing needs releasing. **Capture** saves the rig as it is now (routes on, hand-set values) into a scene.
+- **Scenes made of blocks.** Colour hits, colour changes, wave, sparkle, flash, strobe, node hop, brightness follows, laser looks and fog bursts. Pick what each drives, which sound triggers it, colours and speed; the scene's routes are rebuilt as you edit, and pads mapped to them keep working.
+- **Sections.** LightDeck hears breakdown, groove, build and drop, bar by bar, autopilot on or off:
+  - **block sections:** a block plays only in some sections, or with different speed, sound, colours or laser looks in some (peak looks and faster in the drop), so one scene can follow a whole track;
+  - **limits per section:** a brightness cap and strobe/fog on or off for each section, for every scene;
+  - **hold a section** from the screen or a pad when the detection misses a drop.
+- **Autopilot.** Switches to the scenes tagged for each section:
+  - stays on a scene a minimum number of bars, lets a drop cut in sooner, and rotates scenes for variety;
+  - follows and pauses for you when you pick a scene yourself;
+  - scenes are tagged by hand, guessed offline from their names and content, or set up by the AI along with timing and limits;
+  - shows what it hears, the last 32 bars, and why it switched.
+- **Templates (offline).** Club night, Party, Chill / lounge and Test my rig build tagged block scenes from your rig with fixed rules.
+- **AI.** Describe the night for new scenes (routes, palettes, genre-tuned detection, per-section routes, autopilot tags) using your fixtures, looks, rooms and focus points, or ask it to set up the autopilot for the scenes you have. Every plan is checked and repaired, reviewed before adding, and can be refined and undone.
 - **Controller mapping afterwards.** Map a controller to whatever was built.
 
 ## Projects and settings ([guide](projects-and-settings.md))

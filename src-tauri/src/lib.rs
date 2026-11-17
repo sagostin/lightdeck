@@ -336,6 +336,12 @@ fn autopilot_set(state: State<AppState>, on: bool) {
     control_send(&state, control::Input::AutopilotSet { on });
 }
 
+/// Hold a section from the screen (None lets go).
+#[tauri::command]
+fn autopilot_force(state: State<AppState>, section: Option<String>) {
+    state.autopilot.force(section.as_deref());
+}
+
 #[tauri::command]
 fn autopilot_resume(state: State<AppState>) {
     state.autopilot.resume();
@@ -499,6 +505,17 @@ fn preview_look(state: State<AppState>, fixture: String, look: Option<Look>) {
     }
 }
 
+/// The pattern browser is open on `fixture` (None = closed): routes and the scene leave it
+/// alone while it is. The UI re-sends every second; it lapses after a few seconds otherwise.
+#[tauri::command]
+fn browse_fixture(state: State<AppState>, fixture: Option<String>) {
+    let mut b = state.engine.browsing.lock().unwrap();
+    b.clear();
+    if let Some(f) = fixture {
+        b.insert(f, std::time::Instant::now());
+    }
+}
+
 /// Regenerate a fixture type's default looks (your own looks are kept).
 #[tauri::command]
 fn generate_default_looks(mut profile: Profile, per_range: usize) -> Profile {
@@ -616,6 +633,10 @@ fn default_show() -> Show {
             cooldown_ms: 0,
             every: 1,
             probability: 1.0,
+            sections: vec![],
+            scene: String::new(),
+            motions: Default::default(),
+            switches: vec![],
         },
         Route {
             id: "r-hat-rot".into(),
@@ -633,6 +654,10 @@ fn default_show() -> Show {
             cooldown_ms: 0,
             every: 1,
             probability: 1.0,
+            sections: vec![],
+            scene: String::new(),
+            motions: Default::default(),
+            switches: vec![],
         },
     ];
     Show {
@@ -702,7 +727,7 @@ pub fn run() {
             let show = Arc::new(RwLock::new(show));
             let midi_settings = show.read().unwrap().midi.clone();
             let engine = Engine::start(app.handle().clone(), show, audio.features.clone(), zb.clone());
-            let pilot = autopilot::Autopilot::new();
+            let pilot = autopilot::Autopilot::new(engine.section.clone());
             let (controls, control_tx) = control::Controls::start(
                 engine.show.clone(),
                 engine.manual.clone(),
@@ -711,6 +736,7 @@ pub fn run() {
                 audio.params.clone(),
                 app.handle().clone(),
                 pilot.clone(),
+                engine.scene.clone(),
             );
             pilot.start(app.handle().clone(), engine.show.clone(), audio.features.clone(), control_tx.clone());
             let (midi_tx, midi_rx) = std::sync::mpsc::channel::<midi::MidiEvent>();
@@ -758,6 +784,7 @@ pub fn run() {
             import_qxf,
             generate_default_looks,
             preview_look,
+            browse_fixture,
             clear_previews,
             get_ai_settings,
             save_ai_settings,
@@ -795,6 +822,7 @@ pub fn run() {
             control_state,
             autopilot_set,
             autopilot_resume,
+            autopilot_force,
             autopilot_status,
             ai_autopilot
         ])

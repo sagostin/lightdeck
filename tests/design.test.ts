@@ -136,3 +136,22 @@ test("previews describe routes and triggers", () => {
   assert.equal(describeTrigger(p.controls[4]), "Key 1");
   assert.equal(describeTrigger({ ...p.controls[4], trigger: { ...p.controls[4].trigger, key: " " } }), "Key Space");
 });
+
+// ---------- routes that switch other routes ----------
+import { route as mkRoute, show as smallShow } from "./fixtures.ts";
+import { describeRoute as describe } from "../src/lib/design.ts";
+
+test("a route's summary says which routes it switches and its channels' own triggers", () => {
+  const s = smallShow();
+  const strobe = mkRoute("st", "Strobe", "");
+  const snare = mkRoute("sn", "Build snare", "", {
+    source: "snare",
+    switches: [{ route: "st", to: "on", beats: 8 }, { route: "gone", to: "toggle", beats: 0 }],
+    motions: { "@intensity": { kind: "sweep", ranges: [[0, 255]], values: [], clock: "beat", period: 1, shape: "up", step: 1, seed: 1, source: "level", tags: [], trigger: "bar", retrigger: true } },
+  });
+  s.routes.push(strobe, snare);
+  const text = describe(snare, s, { title: "", summary: "", sensitivity: null, bands: [], palettes: [], routes: [], presets: [], controls: [] });
+  assert.match(text, /switches on Strobe for 8 beats/);
+  assert.match(text, /toggles gone/);
+  assert.match(text, /also moves intensity/);
+});

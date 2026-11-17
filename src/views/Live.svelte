@@ -28,7 +28,7 @@
 
     {#if show.presets.length}
       <div class="panel">
-        <div class="row" style="margin-bottom:8px"><h2>Scenes</h2><span class="muted small grow">recall a scene or saved look</span><Autopilot compact /></div>
+        <div class="row" style="margin-bottom:8px"><h2>Scenes</h2><span class="muted small grow">recall a scene or saved look</span><Autopilot mode="compact" /></div>
         <div class="routes">
           {#each show.presets as p (p.id)}
             <button class="preset" class:on={app.activePresets.includes(p.id)} style="--c:{p.color}"

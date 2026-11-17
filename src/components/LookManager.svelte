@@ -162,7 +162,7 @@
               </Menu>
             </div>
             <div class="line meta">
-              <span class="lbl">Tags</span><Tags bind:tags={l.tags} />
+              <span class="lbl">Tags</span><Tags bind:tags={l.tags} suggestions={["breakdown", "groove", "build", "drop", "chill", "peak"]} />
               <span class="lbl">Sets</span>
               {#each profile.look_sets as s (s.id)}
                 <button class="chip" style="--c:{s.color}" class:on={l.sets.includes(s.id)} aria-pressed={l.sets.includes(s.id)}

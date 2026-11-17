@@ -5,10 +5,14 @@
   import { setId, newMotion, describeMotion, type ChannelDef, type Look, type Motion, type Profile, type ValueNote } from "../lib/types";
   import Tags from "./Tags.svelte";
   import MotionEditor from "./MotionEditor.svelte";
+  import { sectionInfo } from "../lib/autopilot";
+  import { lookMainKey } from "../lib/looks";
 
   let { profile }: { profile: Profile } = $props();
 
   const QUICK = ["safe", "chill", "mid", "peak", "favourite", "large_projection", "blocked"];
+  /** Look tags that look routes following the section pick by. */
+  const SECTION_TAGS = ["breakdown", "groove", "build", "drop"];
   const browsable = $derived(profile.channels.filter((c) => ["pattern", "effect", "beam", "color"].includes(c.group)));
   let chKey = $state(untrack(() => profile.channels.find((c) => c.group === "pattern")?.key ?? profile.channels[0]?.key));
   const ch = $derived(profile.channels.find((c) => c.key === chKey));
@@ -33,6 +37,9 @@
       .filter((c) => c && c.group !== "mode"),
   );
   let include = $state<Record<string, boolean>>({});
+  /** Values of the ticked channels, as the look will save them. Kept here rather than read
+   *  back from the fixture, so routes, scenes or a head's automatic on/off can't leak in. */
+  let held = $state<Record<string, number>>({});
   const fx = $derived(app.show!.fixtures.find((f) => f.id === fxId));
   /** Live value of a channel on the preview fixture. */
   function liveValue(key: string) {
@@ -53,9 +60,24 @@
   function setSecondary(key: string, v: number) {
     if (!fxId) return;
     include[key] = true;
+    held[key] = v;
     touched.add(`${fxId}|${key}`);
     setManual(fxId, key, v);
   }
+  /** Tick: the channel joins the look at its current value, held there. Untick: it leaves
+   *  the look and goes back to whatever else drives it. */
+  function setIncluded(key: string, on: boolean) {
+    include[key] = on;
+    if (on) {
+      held[key] = untrack(() => liveValue(key));
+      if (fxId && !motions[key]) setSecondary(key, held[key]);
+    } else {
+      delete held[key];
+      if (fxId && touched.has(`${fxId}|${key}`)) { setManual(fxId, key, null); touched.delete(`${fxId}|${key}`); }
+    }
+  }
+  /** What a row shows: the look's value when ticked, the fixture's live value when not. */
+  const shown = (key: string) => (include[key] && held[key] !== undefined ? held[key] : liveValue(key));
   function go(v: number) {
     value = Math.max(0, Math.min(255, v));
     preview();
@@ -71,6 +93,19 @@
     motions = {};
   }
   onDestroy(releaseAll);
+
+  // ----- take over the preview fixture -----
+  // While browsing, routes and the playing scene leave the preview fixture alone, so it
+  // (and every slider here) shows only what you set. Re-sent every second; the engine
+  // lets go a few seconds after it stops hearing it (closing the tab, a crash).
+  let takeOver = $state(true);
+  $effect(() => {
+    const f = takeOver ? fxId : null;
+    if (!f) return;
+    invoke("browse_fixture", { fixture: f });
+    const t = setInterval(() => invoke("browse_fixture", { fixture: f }), 1000);
+    return () => { clearInterval(t); invoke("browse_fixture", { fixture: null }); };
+  });
 
   // ----- motions: channels that move instead of holding a value -----
   let motions = $state<Record<string, Motion>>({});
@@ -93,7 +128,7 @@
       if (kind === "catalog") m.tags = note?.tags.filter((t) => t !== "blocked").slice(0, 1) ?? [];
       motions[c.key] = m;
     }
-    if (c.key !== chKey) include[c.key] = true;
+    if (c.key !== chKey) { include[c.key] = true; held[c.key] ??= untrack(() => liveValue(c.key)); }
     openMotion = c.key;
   }
   const MOTION_KINDS: [string, string][] = [
@@ -103,7 +138,7 @@
   /** The look being edited, as it would be saved. */
   function draftLook(): Look {
     const values: Record<string, number> = { [chKey]: value };
-    for (const c of secondary) if (include[c.key]) values[c.key] = untrack(() => liveValue(c.key));
+    for (const c of secondary) if (include[c.key]) values[c.key] = held[c.key] ?? untrack(() => liveValue(c.key));
     const mo: Record<string, Motion> = {};
     for (const [k, m] of Object.entries(motions)) if (k in values) mo[k] = $state.snapshot(m) as Motion;
     return {
@@ -185,7 +220,7 @@
   }
 
   // ----- looks -----
-  // The form below edits either a new look or the look selected in "Your looks".
+  // The form below edits either a new look or the look selected in the list on the right.
   let lookName = $state("");
   let lookTags = $state<string[]>([]);
   let lookSets = $state<string[]>([]);
@@ -194,13 +229,49 @@
   let editingId = $state<string | null>(null);
   const editing = $derived(profile.looks.find((l) => l.id === editingId));
   const headLooks = $derived(profile.looks.filter((l) => !l.builtin && (l.head ?? "") === (head?.name ?? "")));
+  /** Your looks built on value `v` of the channel being browsed. */
+  const looksAt = (v: number) => headLooks.filter((l) => primaryKey(l) === chKey && l.values[chKey] === v);
+  /** Catalogue rows, plus values your looks use that aren't catalogued, in value order. */
+  const catRows = $derived.by(() => {
+    const rows = new Map<number, ValueNote | undefined>(sorted.map((n) => [n.value, n]));
+    for (const l of headLooks) if (primaryKey(l) === chKey && l.values[chKey] !== undefined && !rows.has(l.values[chKey])) rows.set(l.values[chKey], undefined);
+    return [...rows.entries()].sort(([a], [b]) => a - b).map(([v, n]) => ({ value: v, note: n, looks: looksAt(v) }));
+  });
+  /** Catalogue values opened to show their looks (the value being browsed is open unless closed). */
+  let openVal = $state<Record<number, boolean>>({});
+  const isOpen = (v: number) => openVal[v] ?? true;
+  /** Looks built on another channel (e.g. the gallery when browsing patterns), grouped under the value they use. */
+  const lookGroups = $derived.by(() => {
+    const m = new Map<string, { key: string; value: number; looks: Look[] }>();
+    for (const l of headLooks) {
+      const key = primaryKey(l) ?? "";
+      if (key === chKey) continue; // these sit under their value above
+      const v = l.values[key] ?? 0;
+      const id = `${key}:${v}`;
+      if (!m.has(id)) m.set(id, { key, value: v, looks: [] });
+      m.get(id)!.looks.push(l);
+    }
+    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key) || a.value - b.value);
+  });
+  let closedGroup = $state<Record<string, boolean>>({});
+  /** "P1 Pattern 48 · Double line": the channel, the value and its catalogue (or range) name. */
+  function valueName(key: string, v: number) {
+    const c = profile.channels.find((x) => x.key === key);
+    const label = c?.values.find((n) => n.value === v)?.label || (c ? capabilityAt(c, v)?.label : "") || "";
+    return { channel: c?.name ?? key, label };
+  }
+  /** Browse a group's pattern value (switching channel if needed). */
+  function goTo(key: string, v: number) {
+    if (key && key !== chKey && profile.channels.some((c) => c.key === key)) chKey = key;
+    go(v);
+  }
 
   // Name, tags, sets and rating of the selected look update it straight away.
   $effect(() => {
     const snapshot = [lookName, [...lookTags], [...lookSets], lookRating] as const;
     untrack(() => {
       const l = editing;
-      if (!l) return;
+      if (!l || !onOwnPrimary) return; // off its own pattern these are for the new look
       if (snapshot[0].trim() && l.name !== snapshot[0].trim()) l.name = snapshot[0].trim();
       if (JSON.stringify(l.tags) !== JSON.stringify(snapshot[1])) l.tags = [...snapshot[1]];
       if (JSON.stringify(l.sets) !== JSON.stringify(snapshot[2])) l.sets = [...snapshot[2]];
@@ -221,19 +292,53 @@
       tags: [...lookTags, ...(note?.tags ?? []).filter((t) => !lookTags.includes(t))], rating: lookRating || note?.rating || 0,
       sets: [...lookSets],
     };
-    if (editing && look.name === editing.name) look.name = `${look.name} copy`;
+    if (editing && look.name === editing.name) look.name = onOwnPrimary ? `${look.name} copy` : `${look.name} · ${note?.label ? `${note.label} ` : ""}${value}`;
     profile.looks.push(look);
     const n = Object.keys(look.values).length, m = Object.keys(look.motions).length;
     toast(`Saved look "${look.name}" (${n} channel${n === 1 ? "" : "s"}${m ? `, ${m} moving` : ""})`);
     selectLook(profile.looks.at(-1)!, false);
   }
+  /** The selected look has channel changes that "Update look" would save. */
+  const unsaved = $derived.by(() => {
+    if (!editing) return false;
+    JSON.stringify(include); JSON.stringify(held); JSON.stringify(motions); void value; void chKey;
+    const d = untrack(draftLook);
+    return stable(d.values) !== stable(editing.values) || stable(d.motions) !== stable(editing.motions ?? {});
+  });
+  /** JSON with keys sorted and unset fields dropped, so key order doesn't count as a change. */
+  function stable(v: unknown): string {
+    return JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([, y]) => y !== undefined).sort(([a], [b]) => a.localeCompare(b))) : x));
+  }
   /** Save the current channel values and motions into the selected look. */
+  /** The selected look's main channel and value: a look belongs to the pattern it was made on. */
+  const editPrimary = $derived(editing ? primaryKey(editing) : undefined);
+  /** Browsing the selected look's own main value? Off it, Update is off and Save as new
+   *  makes a new look, leaving the original as it was. */
+  const onOwnPrimary = $derived(!editing || (editPrimary === chKey && editing.values[chKey] === value));
+  function backToOwn() {
+    if (editing && editPrimary) goTo(editPrimary, editing.values[editPrimary]);
+  }
   function updateLook() {
-    if (!editing) return;
+    if (!editing || !onOwnPrimary) return;
     const d = draftLook();
     editing.values = d.values;
     editing.motions = d.motions;
     toast(`Updated "${editing.name}"`);
+  }
+  /** Deselect the look: clear the form and its secondary options (unticked and handed
+   *  back), keeping the pattern value you're on. */
+  function deselectLook() {
+    newLook();
+    for (const t of [...touched]) {
+      const [f, c] = t.split("|");
+      if (c === chKey) continue;
+      setManual(f, c, null);
+      touched.delete(t);
+    }
+    include = {};
+    held = {};
+    motions = {};
+    openMotion = null;
   }
   function newLook() {
     editingId = null;
@@ -264,15 +369,28 @@
     lookSets = [...l.sets];
     lookRating = l.rating;
     if (!apply || !fxId) return;
+    // Browse the look's own main channel, so its main option shows and "Update look" saves the right one.
+    const primary = primaryKey(l);
+    if (primary && primary !== chKey) chKey = primary;
+    // Channels the previous look set that this one doesn't go back to normal.
+    for (const t of [...touched]) {
+      const [f, c] = t.split("|");
+      if (f === fxId && !(c in l.values)) { setManual(f, c, null); touched.delete(t); }
+    }
     motions = structuredClone($state.snapshot(l.motions ?? {}));
-    for (const c of secondary) include[c.key] = c.key in l.values;
+    include = Object.fromEntries(Object.keys(l.values).filter((k) => k !== primary).map((k) => [k, true]));
+    held = Object.fromEntries(Object.entries(l.values).filter(([k]) => k !== primary));
     for (const [k, v] of Object.entries(l.values)) {
       if (!motions[k]) {
         touched.add(`${fxId}|${k}`);
         setManual(fxId, k, v);
       }
-      if (k === chKey) value = v;
+      if (k === primary) value = v;
     }
+  }
+  /** A look's main channel: its pattern channel, else the first one you can browse, else its first. */
+  function primaryKey(l: Look): string | undefined {
+    return lookMainKey(profile, l);
   }
   const chName = (k: string) => profile.channels.find((c) => c.key === k)?.name ?? k;
 
@@ -293,13 +411,17 @@
 <div class="pb">
   <div class="col main">
     <div class="panel col">
-      <div class="row">
+      <div class="row wrap">
         <label>Channel</label>
         <select bind:value={chKey}>{#each browsable as c}<option value={c.key}>{c.name}</option>{/each}</select>
         <label>Preview on</label>
         <select bind:value={fxId}>
           {#each previewable as f}<option value={f.id}>{f.name}</option>{:else}<option value={null}>No patched fixture</option>{/each}
         </select>
+        <label class="inline" title="Routes and the playing scene don't touch this fixture while you browse, so the sliders show only what you set here. Untick to see it with the show running on top.">
+          <input type="checkbox" bind:checked={takeOver} /> pause routes on it
+        </label>
+        {#if takeOver && fx}<span class="tag accent" title="Routes and the scene take over again when you leave the pattern browser">routes paused on {fx.name}</span>{/if}
         <span class="grow"></span>
         <button class="ghost" onclick={releaseAll}>Release preview</button>
       </div>
@@ -366,10 +488,11 @@
       </div>
       <div class="sec">
         {#each secondary as c (c.key)}
-          {@const v = liveValue(c.key)}
+          {@const v = shown(c.key)}
           {@const mo = motions[c.key]}
           <div class="secrow" class:inc={include[c.key]}>
-            <input type="checkbox" bind:checked={include[c.key]} title="Include in the look" />
+            <input type="checkbox" checked={!!include[c.key]} onchange={(e) => setIncluded(c.key, e.currentTarget.checked)}
+              title={include[c.key] ? "In the look: saved at this value" : "Not in the look: shows the live value; tick (or move it) to add it"} />
             <span class="nm" title={c.name}>{c.name}</span>
             <select class="kind" class:moving={!!mo} value={mo?.kind ?? "fixed"}
               onchange={(e) => setMotionKind(c, (e.target as HTMLSelectElement).value)} title="Hold a value, or make this channel move">
@@ -391,16 +514,31 @@
       <div class="row savelook">
         {#if editing}
           <span class="tag accent">Editing “{editing.name}”</span>
-          <span class="small faint grow">Name, tags, sets and rating save as you change them. Use Update look to save channel changes.</span>
-          <button class="ghost" onclick={newLook}>New look</button>
+          {#if onOwnPrimary}
+            <span class="small faint grow">Name, tags, sets and rating save as you change them. Use Update look to save channel changes.</span>
+          {:else}
+            <span class="small warn grow">
+              This look is on {chName(editPrimary ?? "")} {editPrimary ? editing.values[editPrimary] : ""}; you're on {ch?.name} {value}.
+              <b>Save as new</b> makes a look here with these options, and leaves “{editing.name}” as it was.
+              <button class="ghost small" onclick={backToOwn}>Back to {editPrimary ? editing.values[editPrimary] : ""}</button>
+            </span>
+          {/if}
+          <button class="ghost" onclick={newLook} title="Start a new look from the options set now">New look</button>
+          <button class="ghost" onclick={deselectLook} title="Deselect the look and reset the secondary options">Deselect</button>
         {:else}
           <span class="tag">New look</span>
-          <span class="small faint grow">Pick a look under Your looks to edit it.</span>
+          <span class="small faint grow">Pick a look in the list on the right to edit it.</span>
         {/if}
       </div>
       <div class="row wrap">
         <input bind:value={lookName} placeholder="Look name, e.g. Beam 12 + zoom chase" class="grow" />
-        <span class="muted small">Tags</span><Tags bind:tags={lookTags} suggestions={[...QUICK, ...yourTags]} />
+        <span class="muted small">Tags</span><Tags bind:tags={lookTags} suggestions={[...QUICK, ...SECTION_TAGS, ...yourTags]} />
+      </div>
+      <div class="row small sectags">
+        <span class="muted" title="Look routes that follow the section use looks tagged for the part of the track playing">Sections</span>
+        {#each SECTION_TAGS as t}
+          <button class="chip" class:on={lookTags.includes(t)} style="--c:{sectionInfo(t)?.color}" onclick={() => { const i = lookTags.indexOf(t); if (i >= 0) lookTags.splice(i, 1); else lookTags.push(t); }}>{t}</button>
+        {/each}
       </div>
       <div class="row wrap">
         <span class="muted small">Sets</span>
@@ -412,8 +550,13 @@
         <span class="grow"></span>
         {#each [1, 2, 3, 4, 5] as r}<button class="star" class:on={lookRating >= r} onclick={() => (lookRating = lookRating === r ? 0 : r)}>★</button>{/each}
         {#if editing}
-          <button class="primary" onclick={updateLook}>Update look</button>
-          <button onclick={saveAsNew}>Save as new</button>
+          {#if onOwnPrimary}
+            <button class="primary" onclick={updateLook} disabled={!unsaved} title={unsaved ? "Save the channel changes into this look" : "No channel changes to save"}>{unsaved ? "Update look •" : "Saved"}</button>
+            <button onclick={saveAsNew}>Save as new</button>
+          {:else}
+            <button disabled title="Update only saves into a look on its own main value. Go back to it, or save a new look here.">Update look</button>
+            <button class="primary" onclick={saveAsNew}>Save as new</button>
+          {/if}
         {:else}
           <button class="primary" onclick={saveAsNew}>Save look</button>
         {/if}
@@ -421,20 +564,62 @@
     </div>
   </div>
 
+  {#snippet lookEntry(l: Look, main: string)}
+    <button class="entry sub" class:cur={l.id === editingId} aria-pressed={l.id === editingId}
+      onclick={() => (l.id === editingId ? deselectLook() : selectLook(l))}
+      title={l.id === editingId ? "Click again to deselect it and reset the secondary options" : "Edit and preview this look"}>
+      <span class="grow lbl">{l.name}</span>
+      <span class="stars">{"★".repeat(l.rating)}</span>
+      {#each l.tags as t}<span class="tag">{t}</span>{/each}
+      <span class="faint small">+ {Object.keys(l.values).filter((k) => k !== main).map(chName).join(", ") || "nothing else"}</span>
+    </button>
+  {/snippet}
   <div class="col side">
     <div class="panel col">
-      <div class="row"><h2 class="grow">Catalog</h2><span class="faint">{sorted.length}</span></div>
+      <div class="row">
+        <h2 class="grow">{ch?.name ?? "Values"} &amp; looks</h2>
+        <span class="faint small">{sorted.length} catalogued · {headLooks.length} look{headLooks.length === 1 ? "" : "s"}</span>
+      </div>
+      <span class="small faint">Values you've tagged, each with the looks built on it. Click a value to browse it, a look to edit and preview it.</span>
       <div class="scroll cat">
-        {#each sorted as n}
-          <button class="entry" class:cur={n.value === value} onclick={() => go(n.value)}>
-            <span class="mono">{n.value}</span>
-            <span class="grow lbl">{n.label || capabilityAt(ch!, n.value)?.label || ""}</span>
-            <span class="stars">{"★".repeat(n.rating)}</span>
-            {#each n.tags as t}<span class="tag" class:blocked={t === "blocked"} class:accent={t === "safe"}>{t}</span>{/each}
-          </button>
+        {#each catRows as row (row.value)}
+          {@const n = row.note}
+          <div class="catrow" class:cur={row.value === value}>
+            {#if row.looks.length}
+              <button class="ghost caret" onclick={() => (openVal[row.value] = !isOpen(row.value))} aria-expanded={isOpen(row.value)}
+                title="{isOpen(row.value) ? 'Hide' : 'Show'} the looks built on this value">{isOpen(row.value) ? "▾" : "▸"}</button>
+            {:else}<span class="caret-gap"></span>{/if}
+            <button class="entry grow" onclick={() => go(row.value)}>
+              <span class="mono">{row.value}</span>
+              <span class="grow lbl">{n?.label || capabilityAt(ch!, row.value)?.label || ""}</span>
+              {#if n}<span class="stars">{"★".repeat(n.rating)}</span>{#each n.tags as t}<span class="tag" class:blocked={t === "blocked"} class:accent={t === "safe"}>{t}</span>{/each}{/if}
+              {#if row.looks.length}<span class="nlooks">{row.looks.length} look{row.looks.length === 1 ? "" : "s"}</span>{/if}
+            </button>
+          </div>
+          {#if row.looks.length && isOpen(row.value)}
+            <div class="sublooks">{#each row.looks as l (l.id)}{@render lookEntry(l, chKey)}{/each}</div>
+          {/if}
         {:else}
-          <span class="faint small">Nothing tagged yet. Step through values and tag the ones you like.</span>
+          <span class="faint small">Nothing tagged yet. Step through values and tag the ones you like, or save a look.</span>
         {/each}
+        {#if lookGroups.length}
+          <span class="other small faint">Looks built on other channels</span>
+          {#each lookGroups as g (`${g.key}:${g.value}`)}
+            {@const id = `${g.key}:${g.value}`}
+            {@const vn = valueName(g.key, g.value)}
+            <div class="catrow">
+              <button class="ghost caret" onclick={() => (closedGroup[id] = !closedGroup[id])} aria-expanded={!closedGroup[id]}>{closedGroup[id] ? "▸" : "▾"}</button>
+              <button class="entry grow" onclick={() => goTo(g.key, g.value)} title="Browse {vn.channel} and this value">
+                <span class="small faint">{vn.channel}</span><span class="mono">{g.value}</span>
+                <span class="grow lbl">{vn.label}</span>
+                <span class="nlooks">{g.looks.length} look{g.looks.length === 1 ? "" : "s"}</span>
+              </button>
+            </div>
+            {#if !closedGroup[id]}
+              <div class="sublooks">{#each g.looks as l (l.id)}{@render lookEntry(l, g.key)}{/each}</div>
+            {/if}
+          {/each}
+        {/if}
       </div>
       <div class="row">
         <select class="grow" bind:value={copyTo}>
@@ -442,21 +627,6 @@
           {#each profile.channels.filter((c) => c.key !== chKey && c.group === ch?.group) as c}<option value={c.key}>{c.name}</option>{/each}
         </select>
         <button disabled={!copyTo} onclick={copyCatalog}>Copy</button>
-      </div>
-    </div>
-    <div class="panel col">
-      <div class="row"><h2 class="grow">Your looks{head ? ` · ${head.name}` : ""}</h2><span class="faint">{headLooks.length}</span></div>
-      <div class="scroll cat">
-        {#each headLooks as l (l.id)}
-          <button class="entry" class:cur={l.id === editingId} onclick={() => selectLook(l)} title="Edit and preview this look">
-            <span class="grow lbl">{l.name}</span>
-            <span class="stars">{"★".repeat(l.rating)}</span>
-            <span class="faint small">{Object.keys(l.values).map(chName).join(" + ")}</span>
-            {#each l.tags as t}<span class="tag">{t}</span>{/each}
-          </button>
-        {:else}
-          <span class="faint small">Save a look to see it here. Manage looks and sets on the Patterns tab.</span>
-        {/each}
       </div>
     </div>
   </div>
@@ -472,6 +642,7 @@
   .center { align-items: center; text-align: center; }
   .val { font-size: 44px; font-weight: 600; line-height: 1; }
   .wrap { flex-wrap: wrap; }
+  .wrap select { max-width: 100%; min-width: 0; }
   .small { font-size: 12px; padding: 3px 8px; }
   .tagin { width: 140px; height: 26px; font-size: 12px; border-style: dashed; }
   .star { color: var(--faint); padding: 2px 6px; }
@@ -487,9 +658,24 @@
   .savelook { border-top: 1px solid var(--line); padding-top: 8px; }
   .chip { font-size: 12px; padding: 3px 8px; border: 1px dashed color-mix(in srgb, var(--c) 45%, var(--line)); color: var(--muted); background: transparent; }
   .chip.on { background: color-mix(in srgb, var(--c) 35%, transparent); border: 1px solid var(--c); color: var(--text); font-weight: 600; }
-  .cat { max-height: 320px; display: flex; flex-direction: column; gap: 2px; }
+  .cat { max-height: 640px; display: flex; flex-direction: column; gap: 2px; }
   .entry { display: flex; align-items: center; gap: 6px; text-align: left; background: transparent; border-color: transparent; flex-wrap: wrap; }
   .entry.cur { background: var(--accent-bg); border-color: #7c5cff55; }
   .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
   .stars { color: var(--warn); font-size: 11px; }
+  .warn { color: var(--warn); }
+  .inline { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; color: var(--muted); }
+  .catrow { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+  .catrow.cur { background: var(--accent-bg); }
+  .catrow .entry { min-width: 0; }
+  .nlooks { font-size: 11px; white-space: nowrap; color: var(--accent-2); }
+  .caret-gap { width: 25px; flex-shrink: 0; }
+  .other { margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .caret { padding: 0 6px; }
+  .sublooks { display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px 22px; padding-left: 8px; border-left: 2px solid var(--line-2); }
+  .entry.sub { font-size: 12px; padding: 3px 8px; }
+  .entry.sub { row-gap: 0; }
+  .entry.sub .lbl { color: var(--text); flex: 1 1 0; min-width: 0; }
+  .entry.sub .faint.small { flex-basis: 100%; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .caret { font-size: 13px; }
 </style>
